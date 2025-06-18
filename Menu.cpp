@@ -113,12 +113,12 @@ void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawMainSettingsMenu(Adafruit_SH1106G& display, int selected) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     // Title
     display.setCursor(35, 0);
     display.println(F("Settings"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     const char* items[] = {
         "Time & Date",
@@ -277,11 +277,11 @@ void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected,
                              DateTime dt, bool editMode, int editValue) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("Time & Date"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     const char* labels[] = {"Year:", "Month:", "Day:", "Hour:", "Minute:"};
     int values[] = {dt.year(), dt.month(), dt.day(), dt.hour(), dt.minute()};
@@ -335,13 +335,13 @@ void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected,
 void drawEditValueScreen(Adafruit_SH1106G& display, int item, int value) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     const char* titles[] = {"Set Year", "Set Month", "Set Day", "Set Hour", "Set Minute"};
     
     display.setCursor(30, 0);
     display.println(titles[item]);
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     display.setTextSize(3);
     
@@ -439,11 +439,11 @@ void drawSensorCalibMenu(Adafruit_SH1106G& display, int selected,
                         SystemSettings& settings, SensorData& currentData) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(20, 0);
     display.println(F("Sensor Calibration"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     // Temperature offset
     if (selected == 0) {
@@ -479,11 +479,11 @@ void drawEditFloatValue(Adafruit_SH1106G& display, const char* title,
                        float value, const char* unit) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(30, 0);
     display.println(title);
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     display.setTextSize(2);
     display.setCursor(30, 25);
@@ -507,7 +507,7 @@ void handleAudioMenu(Adafruit_SH1106G& display, MenuState& state,
                     bool* buttonPressed) {
     static bool editing = false;
     static int audioMenuItem = 0;
-    const int AUDIO_ITEMS = 7;
+    const int AUDIO_ITEMS = 6;
     
     if (!editing) {
         if (wasButtonPressed(0)) { // UP
@@ -520,14 +520,13 @@ void handleAudioMenu(Adafruit_SH1106G& display, MenuState& state,
         }
         if (wasButtonPressed(2)) { // SELECT
             editing = true;
-            switch (audioMenuItem) {
-                case 0: state.editIntValue = settings.micGain; break;
-                case 1: state.editIntValue = settings.audioSensitivity; break;
-                case 2: state.editIntValue = settings.queenFreqMin; break;
-                case 3: state.editIntValue = settings.queenFreqMax; break;
-                case 4: state.editIntValue = settings.swarmFreqMin; break;
-                case 5: state.editIntValue = settings.swarmFreqMax; break;
-                case 6: state.editIntValue = settings.stressThreshold; break;
+            switch (audioMenuItem) {                
+                case 0: state.editIntValue = settings.audioSensitivity; break;
+                case 1: state.editIntValue = settings.queenFreqMin; break;
+                case 2: state.editIntValue = settings.queenFreqMax; break;
+                case 3: state.editIntValue = settings.swarmFreqMin; break;
+                case 4: state.editIntValue = settings.swarmFreqMax; break;
+                case 5: state.editIntValue = settings.stressThreshold; break;
             }
         }
         if (wasButtonPressed(3)) { // BACK
@@ -539,54 +538,51 @@ void handleAudioMenu(Adafruit_SH1106G& display, MenuState& state,
     } else {
         // Editing mode with long press support
         if (wasButtonPressed(0) || shouldRepeat(0)) { // UP
-            switch (audioMenuItem) {
-                case 0: // Mic Gain
-                case 1: // Audio Sensitivity
+            switch (audioMenuItem) {                
+                case 0: // Audio Sensitivity
                     state.editIntValue++;
                     if (state.editIntValue > 10) state.editIntValue = 10;
                     break;
-                case 2: // Queen Freq Min
-                case 3: // Queen Freq Max
-                case 4: // Swarm Freq Min
-                case 5: // Swarm Freq Max
+                case 1: // Queen Freq Min
+                case 2: // Queen Freq Max
+                case 3: // Swarm Freq Min
+                case 4: // Swarm Freq Max
                     state.editIntValue += 10;
                     if (state.editIntValue > 1000) state.editIntValue = 1000;
                     break;
-                case 6: // Stress Threshold
+                case 5: // Stress Threshold
                     state.editIntValue += 5;
                     if (state.editIntValue > 100) state.editIntValue = 100;
                     break;
             }
         }
         if (wasButtonPressed(1) || shouldRepeat(1)) { // DOWN
-            switch (audioMenuItem) {
-                case 0: // Mic Gain
-                case 1: // Audio Sensitivity
+            switch (audioMenuItem) {                
+                case 0: // Audio Sensitivity
                     state.editIntValue--;
                     if (state.editIntValue < 0) state.editIntValue = 0;
                     break;
-                case 2: // Queen Freq Min
-                case 3: // Queen Freq Max
-                case 4: // Swarm Freq Min
-                case 5: // Swarm Freq Max
+                case 1: // Queen Freq Min
+                case 2: // Queen Freq Max
+                case 3: // Swarm Freq Min
+                case 4: // Swarm Freq Max
                     state.editIntValue -= 10;
                     if (state.editIntValue < 50) state.editIntValue = 50;
                     break;
-                case 6: // Stress Threshold
+                case 5: // Stress Threshold
                     state.editIntValue -= 5;
                     if (state.editIntValue < 0) state.editIntValue = 0;
                     break;
             }
         }
         if (wasButtonPressed(2)) { // SELECT - Save
-            switch (audioMenuItem) {
-                case 0: settings.micGain = state.editIntValue; break;
-                case 1: settings.audioSensitivity = state.editIntValue; break;
-                case 2: settings.queenFreqMin = state.editIntValue; break;
-                case 3: settings.queenFreqMax = state.editIntValue; break;
-                case 4: settings.swarmFreqMin = state.editIntValue; break;
-                case 5: settings.swarmFreqMax = state.editIntValue; break;
-                case 6: settings.stressThreshold = state.editIntValue; break;
+            switch (audioMenuItem) {                
+                case 0: settings.audioSensitivity = state.editIntValue; break;
+                case 1: settings.queenFreqMin = state.editIntValue; break;
+                case 2: settings.queenFreqMax = state.editIntValue; break;
+                case 3: settings.swarmFreqMin = state.editIntValue; break;
+                case 4: settings.swarmFreqMax = state.editIntValue; break;
+                case 5: settings.stressThreshold = state.editIntValue; break;
             }
             editing = false;
             saveSettings(settings);
@@ -603,19 +599,19 @@ void handleAudioMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawAudioMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("Audio Settings"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     const char* labels[] = {
-        "Mic Gain:", "Sensitivity:", "Queen Min:", 
+        "Sensitivity:", "Queen Min:", 
         "Queen Max:", "Swarm Min:", "Swarm Max:", "Stress Lvl:"
     };
     
     int values[] = {
-        settings.micGain, settings.audioSensitivity,
+        settings.audioSensitivity,
         settings.queenFreqMin, settings.queenFreqMax,
         settings.swarmFreqMin, settings.swarmFreqMax,
         settings.stressThreshold
@@ -623,7 +619,7 @@ void drawAudioMenu(Adafruit_SH1106G& display, int selected, SystemSettings& sett
     
     // Show 4 items at a time
     int startItem = selected > 3 ? selected - 3 : 0;
-    for (int i = 0; i < 4 && (startItem + i) < 7; i++) {
+    for (int i = 0; i < 4 && (startItem + i) < 6; i++) {
         int itemIdx = startItem + i;
         int y = 16 + (i * 10);
         
@@ -709,11 +705,11 @@ void handleLoggingMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawLoggingMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(30, 0);
     display.println(F("Logging Setup"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     // Log interval
     if (selected == 0) {
@@ -819,11 +815,11 @@ void handleAlertMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawAlertMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(20, 0);
     display.println(F("Alert Thresholds"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     const char* labels[] = {"Temp Min:", "Temp Max:", "Humid Min:", "Humid Max:"};
     float values[] = {settings.tempMin, settings.tempMax, settings.humidityMin, settings.humidityMax};
@@ -895,11 +891,11 @@ void handleSystemMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("System Settings"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     display.setCursor(0, 20);
     display.print(F(">"));
@@ -918,11 +914,11 @@ void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& set
 void drawEditIntValue(Adafruit_SH1106G& display, const char* title, int value, const char* unit) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(30, 0);
     display.println(title);
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     display.setTextSize(2);
     display.setCursor(40, 25);
@@ -939,11 +935,11 @@ void drawEditIntValue(Adafruit_SH1106G& display, const char* title, int value, c
 void drawEditBoolValue(Adafruit_SH1106G& display, const char* title, bool value) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
+    display.setTextColor(SH1106_WHITE);
     
     display.setCursor(40, 0);
     display.println(title);
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
     display.setTextSize(2);
     display.setCursor(45, 25);
@@ -958,7 +954,7 @@ void drawEditBoolValue(Adafruit_SH1106G& display, const char* title, bool value)
 
 const char* getAudioMenuTitle(int item) {
     const char* titles[] = {
-        "Mic Gain", "Sensitivity", "Queen Min Freq",
+        "Sensitivity", "Queen Min Freq",
         "Queen Max Freq", "Swarm Min Freq", "Swarm Max Freq",
         "Stress Level"
     };
@@ -966,7 +962,7 @@ const char* getAudioMenuTitle(int item) {
 }
 
 const char* getAudioMenuUnit(int item) {
-    if (item < 2) return "/10";
-    if (item < 6) return " Hz";
-    return "%";
+    if (item == 0) return "/10";  // Sensitivity
+    if (item < 5) return " Hz";   // Frequencies
+    return "%";                   // Stress level
 }

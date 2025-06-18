@@ -10,7 +10,7 @@
 #include "DataStructures.h"
 
 // Function declarations
-void checkAlerts(SensorData& data, SystemSettings& settings);
+void checkAlerts(SensorData& data, SystemSettings& settings, SystemStatus& status);
 uint8_t getAlertPriority(uint8_t alertFlag);
 const char* getAlertDescription(uint8_t alertFlag);
 const char* getAlertString(uint8_t alertFlags);
@@ -24,6 +24,7 @@ void handleHumidityAlert(float humidity, SystemSettings& settings);
 void handleLowBatteryAlert(float voltage);
 
 // Alert statistics and logging
+void handleSDErrorAlert();
 void getAlertStatistics(uint32_t& totalAlerts, uint32_t alertCounts[8]);
 void logAlert(uint8_t alertType, float value, RTC_DS3231& rtc, SystemStatus& status);
 

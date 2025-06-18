@@ -56,8 +56,7 @@ struct SystemSettings {
     float tempOffset;           // -10.0 to +10.0°C
     float humidityOffset;       // -20.0 to +20.0%
     
-    // Audio settings
-    uint8_t micGain;           // 0-10
+    // Audio settings    
     uint8_t audioSensitivity;  // 0-10
     
     // Classification thresholds
@@ -106,8 +105,7 @@ struct SystemStatus {
     bool systemReady;
     bool rtcWorking;
     bool displayWorking;
-    bool bmpWorking;
-    bool shtWorking;
+    bool bmeWorking;   
     bool sdWorking;
     bool pdmWorking;
 };

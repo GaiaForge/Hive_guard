@@ -7,43 +7,24 @@
 #include "Utils.h"
 
 // Global audio buffers
-short sampleBuffer[PDM_BUFFER_SIZE];
+int audioBuffer[AUDIO_SAMPLE_BUFFER_SIZE];
+volatile int audioSampleIndex = 0;
+
+// Missing variables that were referenced but not declared
+short* sampleBuffer = nullptr;
 volatile int samplesRead = 0;
 
 // =============================================================================
 // AUDIO INITIALIZATION
 // =============================================================================
 
-void initializeAudio(uint8_t micGain, SystemStatus& status) {
-    // Set PDM data handler
-    PDM.onReceive(onPDMdata);
+void initializeAudio(SystemStatus& status) {
+    // Configure analog input for MAX9814
+    analogReadResolution(12);  // 12-bit resolution
     
-    // Initialize PDM with mono channel at 16kHz
-    if (PDM.begin(1, AUDIO_SAMPLE_RATE)) {
-        status.pdmWorking = true;
-        
-        // Set microphone gain (0-100)
-        PDM.setGain(micGain * 10);
-        
-        Serial.println(F("PDM microphone initialized"));
-    } else {
-        Serial.println(F("PDM initialization failed"));
-    }
-}
-
-// =============================================================================
-// PDM DATA HANDLER
-// =============================================================================
-
-void onPDMdata() {
-    // Query the number of available bytes
-    int bytesAvailable = PDM.available();
-    
-    // Read into the sample buffer
-    PDM.read(sampleBuffer, bytesAvailable);
-    
-    // Update samples read count
-    samplesRead = bytesAvailable / 2;  // 16-bit samples
+    status.pdmWorking = true;  // Reuse this flag
+    Serial.println(F("MAX9814 analog microphone initialized"));
+    Serial.println(F("Using automatic gain control (AGC)"));
 }
 
 // =============================================================================
@@ -51,47 +32,81 @@ void onPDMdata() {
 // =============================================================================
 
 void processAudio(SensorData& data, SystemSettings& settings) {
-    if (samplesRead == 0) {
-        return;
+    static unsigned long lastSampleTime = 0;
+    unsigned long currentTime = millis();
+    
+    // Sample at regular intervals
+    if (currentTime - lastSampleTime >= (1000 / AUDIO_SAMPLE_RATE)) {
+        int audioSample = analogRead(AUDIO_INPUT_PIN);
+        
+        audioBuffer[audioSampleIndex] = audioSample;
+        audioSampleIndex++;
+        
+        if (audioSampleIndex >= AUDIO_SAMPLE_BUFFER_SIZE) {
+            // Buffer full - analyze it
+            AudioAnalysis analysis = analyzeAudioBuffer();  // Fixed: no parameters
+            
+            // Update sensor data
+            data.dominantFreq = analysis.dominantFreq;
+            data.soundLevel = analysis.soundLevel;
+            data.beeState = classifyBeeState(analysis, settings);
+            
+            // Reset buffer
+            audioSampleIndex = 0;
+        }
+        
+        lastSampleTime = currentTime;
     }
-    
-    // Process the audio buffer
-    AudioAnalysis analysis = analyzeAudioBuffer(sampleBuffer, samplesRead);
-    
-    // Update sensor data
-    data.dominantFreq = analysis.dominantFreq;
-    data.soundLevel = analysis.soundLevel;
-    
-    // Classify bee state
-    data.beeState = classifyBeeState(analysis, settings);
-    
-    // Reset samples read
-    samplesRead = 0;
 }
 
 // =============================================================================
-// AUDIO ANALYSIS
+// AUDIO ANALYSIS - FIXED FUNCTION SIGNATURE
 // =============================================================================
 
-AudioAnalysis analyzeAudioBuffer(short* buffer, int samples) {
+AudioAnalysis analyzeAudioBuffer() {  // Fixed: no parameters, uses global audioBuffer
     AudioAnalysis result;
     
-    // Zero crossing analysis for frequency detection
+    if (audioSampleIndex < 32) {
+        // Not enough samples for reliable analysis
+        result.dominantFreq = 0;
+        result.soundLevel = 0;
+        result.peakToAvg = 0;
+        result.spectralCentroid = 0;
+        return result;
+    }
+    
+    // Variables for analysis
     int zeroCrossings = 0;
     int lastSign = 0;
     long sumAmplitude = 0;
     int maxAmplitude = 0;
+    int minAmplitude = 4095;  // 12-bit ADC max
     
-    for (int i = 1; i < samples; i++) {
-        // Calculate amplitude sum and max
-        int amplitude = abs(buffer[i]);
+    // DC offset removal - calculate average first
+    long dcOffset = 0;
+    for (int i = 0; i < audioSampleIndex; i++) {
+        dcOffset += audioBuffer[i];
+    }
+    dcOffset /= audioSampleIndex;
+    
+    // Main analysis loop with DC offset removed
+    for (int i = 1; i < audioSampleIndex; i++) {
+        // Remove DC offset (MAX9814 centers around 2048 for 12-bit ADC)
+        int centeredSample = audioBuffer[i] - dcOffset;
+        
+        // Calculate amplitude statistics
+        int amplitude = abs(centeredSample);
         sumAmplitude += amplitude;
+        
         if (amplitude > maxAmplitude) {
             maxAmplitude = amplitude;
         }
+        if (amplitude < minAmplitude) {
+            minAmplitude = amplitude;
+        }
         
-        // Detect zero crossings
-        int currentSign = (buffer[i] >= 0) ? 1 : -1;
+        // Zero crossing detection for frequency estimation
+        int currentSign = (centeredSample >= 0) ? 1 : -1;
         if (lastSign != 0 && currentSign != lastSign) {
             zeroCrossings++;
         }
@@ -99,18 +114,34 @@ AudioAnalysis analyzeAudioBuffer(short* buffer, int samples) {
     }
     
     // Calculate dominant frequency from zero crossings
-    float duration = (float)samples / AUDIO_SAMPLE_RATE;
-    result.dominantFreq = (zeroCrossings / 2.0) / duration;
+    float duration = (float)audioSampleIndex / AUDIO_SAMPLE_RATE;
+    if (duration > 0 && zeroCrossings > 0) {
+        result.dominantFreq = (zeroCrossings / 2.0) / duration;
+        
+        // Constrain to reasonable bee frequency range (50-1000 Hz)
+        if (result.dominantFreq < 50) result.dominantFreq = 0;
+        if (result.dominantFreq > 1000) result.dominantFreq = 1000;
+    } else {
+        result.dominantFreq = 0;
+    }
     
-    // Calculate sound level (0-100)
-    float avgAmplitude = sumAmplitude / samples;
-    result.soundLevel = constrain(map(avgAmplitude, 0, 5000, 0, 100), 0, 100);
+    // Calculate sound level optimized for MAX9814
+    // MAX9814 has AGC, so we need to look at signal dynamics rather than absolute level
+    float avgAmplitude = (float)sumAmplitude / audioSampleIndex;
     
-    // Calculate peak-to-average ratio (for detecting specific patterns)
+    // Scale to 0-100 range, accounting for 12-bit ADC range
+    // Use dynamic range (max-min) rather than just average for AGC compensation
+    int dynamicRange = maxAmplitude - minAmplitude;
+    
+    // Combine average amplitude and dynamic range for better AGC handling
+    float normalizedLevel = (avgAmplitude * 0.7) + (dynamicRange * 0.3);
+    result.soundLevel = constrain(map(normalizedLevel, 0, 2048, 0, 100), 0, 100);
+    
+    // Calculate peak-to-average ratio (important for bee sound classification)
     result.peakToAvg = (avgAmplitude > 0) ? (float)maxAmplitude / avgAmplitude : 0;
     
-    // Simple spectral centroid estimation
-    result.spectralCentroid = estimateSpectralCentroid(buffer, samples);
+    // Enhanced spectral centroid estimation optimized for bee frequencies
+    result.spectralCentroid = estimateSpectralCentroidOptimized();
     
     return result;
 }
@@ -119,43 +150,74 @@ AudioAnalysis analyzeAudioBuffer(short* buffer, int samples) {
 // SPECTRAL ANALYSIS
 // =============================================================================
 
-float estimateSpectralCentroid(short* buffer, int samples) {
-    // Simple spectral centroid estimation using zero-crossing rate variations
-    // This gives us a rough idea of where the frequency content is centered
+float estimateSpectralCentroidOptimized() {
+    // Optimized for bee frequency analysis (100-800 Hz range)
+    const int windowSize = 32;  // Smaller windows for better frequency resolution
+    const int numWindows = audioSampleIndex / windowSize;
     
-    const int windowSize = 64;
-    const int numWindows = samples / windowSize;
-    
-    if (numWindows < 2) {
+    if (numWindows < 3) {
         return 0;
     }
     
     float totalWeightedFreq = 0;
     float totalEnergy = 0;
     
+    // Calculate DC offset for this buffer
+    long dcOffset = 0;
+    for (int i = 0; i < audioSampleIndex; i++) {
+        dcOffset += audioBuffer[i];
+    }
+    dcOffset /= audioSampleIndex;
+    
     for (int w = 0; w < numWindows; w++) {
         int windowStart = w * windowSize;
         int zeroCrossings = 0;
         float windowEnergy = 0;
+        int lastSign = 0;
         
-        // Count zero crossings in this window
+        // Analyze this window
         for (int i = 1; i < windowSize; i++) {
             int idx = windowStart + i;
-            if (idx < samples) {
-                if ((buffer[idx-1] >= 0 && buffer[idx] < 0) ||
-                    (buffer[idx-1] < 0 && buffer[idx] >= 0)) {
-                    zeroCrossings++;
-                }
-                windowEnergy += abs(buffer[idx]);
+            if (idx >= audioSampleIndex) break;
+            
+            // Remove DC offset
+            int current = audioBuffer[idx] - dcOffset;
+            int previous = audioBuffer[idx-1] - dcOffset;
+            
+            // Zero crossing detection
+            int currentSign = (current >= 0) ? 1 : -1;
+            int previousSign = (previous >= 0) ? 1 : -1;
+            
+            if (previousSign != currentSign) {
+                zeroCrossings++;
             }
+            
+            // Energy calculation
+            windowEnergy += abs(current);
         }
         
         // Estimate frequency for this window
-        float windowFreq = (zeroCrossings * AUDIO_SAMPLE_RATE) / (2.0 * windowSize);
+        float windowDuration = (float)windowSize / AUDIO_SAMPLE_RATE;
+        float windowFreq = 0;
+        if (windowDuration > 0 && zeroCrossings > 0) {
+            windowFreq = (zeroCrossings / 2.0) / windowDuration;
+            
+            // Weight frequencies in bee range more heavily
+            float freqWeight = 1.0;
+            if (windowFreq >= 200 && windowFreq <= 600) {
+                freqWeight = 2.0;  // Boost bee frequency range
+            } else if (windowFreq >= 100 && windowFreq <= 800) {
+                freqWeight = 1.5;  // Moderate boost for extended bee range
+            }
+            
+            windowEnergy *= freqWeight;
+        }
         
-        // Weight by energy
-        totalWeightedFreq += windowFreq * windowEnergy;
-        totalEnergy += windowEnergy;
+        // Weight by energy (only if frequency is reasonable)
+        if (windowFreq >= 50 && windowFreq <= 1000) {
+            totalWeightedFreq += windowFreq * windowEnergy;
+            totalEnergy += windowEnergy;
+        }
     }
     
     return (totalEnergy > 0) ? totalWeightedFreq / totalEnergy : 0;
@@ -222,7 +284,6 @@ uint8_t classifyBeeState(AudioAnalysis& analysis, SystemSettings& settings) {
 // ABSCONDING DETECTION
 // =============================================================================
 
-
 AbscondingIndicators detectAbscondingRisk(AudioAnalysis& analysis, 
                                           SystemSettings& settings,
                                           uint32_t currentTime) {
@@ -287,8 +348,6 @@ AbscondingIndicators detectAbscondingRisk(AudioAnalysis& analysis,
 // DAILY PATTERN TRACKING
 // =============================================================================
 
-
-
 void updateDailyPattern(DailyPattern& pattern, uint8_t hour, 
                        uint8_t activity, float temperature) {
     // Update hourly averages
@@ -325,7 +384,6 @@ void updateDailyPattern(DailyPattern& pattern, uint8_t hour,
 // =============================================================================
 // ENVIRONMENTAL STRESS DETECTION
 // =============================================================================
-
 
 uint8_t detectEnvironmentalStress(SensorData& data, AudioAnalysis& audio,
                                  DailyPattern& pattern, RTC_DS3231& rtc) {
@@ -376,7 +434,7 @@ void runAudioDiagnostics(SystemStatus& status) {
     Serial.println(F("\n=== Audio Diagnostics ==="));
     
     if (status.pdmWorking) {
-        Serial.println(F("PDM Microphone: OK"));
+        Serial.println(F("Microphone: OK"));
         
         // Sample for 1 second
         unsigned long startTime = millis();
@@ -384,15 +442,15 @@ void runAudioDiagnostics(SystemStatus& status) {
         float maxLevel = 0;
         
         while (millis() - startTime < 1000) {
-            if (samplesRead > 0) {
-                AudioAnalysis analysis = analyzeAudioBuffer(sampleBuffer, samplesRead);
-                totalSamples += samplesRead;
+            if (audioSampleIndex > 0) {
+                AudioAnalysis analysis = analyzeAudioBuffer();
+                totalSamples += audioSampleIndex;
                 
                 if (analysis.soundLevel > maxLevel) {
                     maxLevel = analysis.soundLevel;
                 }
                 
-                samplesRead = 0;
+                audioSampleIndex = 0;  // Reset for next analysis
             }
             delay(10);
         }
@@ -403,7 +461,7 @@ void runAudioDiagnostics(SystemStatus& status) {
         Serial.print(maxLevel);
         Serial.println(F("%"));
     } else {
-        Serial.println(F("PDM Microphone: NOT INITIALIZED"));
+        Serial.println(F("Microphone: NOT INITIALIZED"));
     }
     
     Serial.println(F("========================\n"));
@@ -425,14 +483,14 @@ void calibrateAudioLevels(SystemSettings& settings, int durationSeconds) {
     int sampleCount = 0;
     
     while (millis() - startTime < duration) {
-        if (samplesRead > 0) {
-            AudioAnalysis analysis = analyzeAudioBuffer(sampleBuffer, samplesRead);
+        if (audioSampleIndex > 0) {
+            AudioAnalysis analysis = analyzeAudioBuffer();
             
             avgFreq += analysis.dominantFreq;
             avgLevel += analysis.soundLevel;
             sampleCount++;
             
-            samplesRead = 0;
+            audioSampleIndex = 0;  // Reset for next analysis
         }
         delay(100);
     }

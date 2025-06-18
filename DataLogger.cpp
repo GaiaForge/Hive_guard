@@ -5,7 +5,8 @@
 
 #include "DataLogger.h"
 #include "Utils.h"
-#include "Alerts.h"  // Add this include for getAlertString
+#include "Alerts.h" 
+#include "Sensors.h"
 
 // Use SDLib namespace to avoid ambiguity
 using SDFile = SDLib::File;
@@ -93,9 +94,7 @@ void writeLogHeader(SDFile& file, DateTime& now, SystemSettings& settings) {
     file.print(F(",HumOffset="));
     file.print(settings.humidityOffset);
     file.print(F(",LogInterval="));
-    file.print(settings.logInterval);
-    file.print(F(",MicGain="));
-    file.print(settings.micGain);
+    file.print(settings.logInterval);    
     file.print(F(",AudioSens="));
     file.println(settings.audioSensitivity);
     
@@ -293,6 +292,34 @@ void checkSDCard(SystemStatus& status) {
     }
 }
 
+void checkSDCardAtStartup(Adafruit_SH1106G& display, SystemStatus& status) {
+    if (SD.begin(SD_CS_PIN)) {
+        status.sdWorking = true;
+        Serial.println(F(" OK"));
+        updateDiagnosticLine(display, "SD Card: OK");
+        
+        // Test write capability
+        SDFile testFile = SD.open("/test.tmp", FILE_WRITE);
+        if (testFile) {
+            testFile.println(F("test"));
+            testFile.close();
+            SD.remove("/test.tmp");
+            updateDiagnosticLine(display, "SD Write: OK");
+        } else {
+            updateDiagnosticLine(display, "SD Write: FAILED");
+        }
+    } else {
+        status.sdWorking = false;
+        Serial.println(F(" NOT FOUND"));
+        updateDiagnosticLine(display, "SD Card: NOT FOUND");
+        
+        // Show message for 1 second
+        delay(1000);
+        updateDiagnosticLine(display, "Will continue without SD");
+    }
+}
+
+
 // =============================================================================
 // DIAGNOSTIC LOGGING
 // =============================================================================
@@ -312,10 +339,7 @@ void logDiagnostics(SystemStatus& status, SystemSettings& settings) {
         diagFile.println(status.rtcWorking ? "OK" : "FAIL");
         diagFile.print(F("  Display: "));
         diagFile.println(status.displayWorking ? "OK" : "FAIL");
-        diagFile.print(F("  BMP280: "));
-        diagFile.println(status.bmpWorking ? "OK" : "FAIL");
-        diagFile.print(F("  SHT31: "));
-        diagFile.println(status.shtWorking ? "OK" : "FAIL");
+        diagFile.print(F("  bme280: "));
         diagFile.print(F("  SD Card: "));
         diagFile.println(status.sdWorking ? "OK" : "FAIL");
         diagFile.print(F("  PDM Mic: "));

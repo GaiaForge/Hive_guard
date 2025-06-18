@@ -19,8 +19,7 @@ SystemSettings getDefaultSettings() {
     SystemSettings defaults;
     
     defaults.tempOffset = DEFAULT_TEMP_OFFSET;
-    defaults.humidityOffset = DEFAULT_HUMIDITY_OFFSET;
-    defaults.micGain = DEFAULT_MIC_GAIN;
+    defaults.humidityOffset = DEFAULT_HUMIDITY_OFFSET;    
     defaults.audioSensitivity = DEFAULT_AUDIO_SENSITIVITY;
     defaults.queenFreqMin = DEFAULT_QUEEN_FREQ_MIN;
     defaults.queenFreqMax = DEFAULT_QUEEN_FREQ_MAX;
@@ -131,12 +130,7 @@ void validateSettings(SystemSettings& settings) {
     if (settings.humidityOffset < -20.0 || settings.humidityOffset > 20.0) {
         settings.humidityOffset = DEFAULT_HUMIDITY_OFFSET;
     }
-    
-    // Validate mic gain
-    if (settings.micGain > 10) {
-        settings.micGain = DEFAULT_MIC_GAIN;
-    }
-    
+            
     // Validate audio sensitivity
     if (settings.audioSensitivity > 10) {
         settings.audioSensitivity = DEFAULT_AUDIO_SENSITIVITY;

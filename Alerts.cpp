@@ -4,19 +4,20 @@
  */
 
 #include "Alerts.h"
+#include "Utils.h"
 
 // Alert history for preventing spam
-static unsigned long lastAlertTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+static unsigned long lastAlertTime[7] = {0, 0, 0, 0, 0, 0, 0};  
 const unsigned long ALERT_COOLDOWN = 300000; // 5 minutes
 
 // =============================================================================
 // ALERT CHECKING
 // =============================================================================
 
-void checkAlerts(SensorData& data, SystemSettings& settings) {
+void checkAlerts(SensorData& data, SystemSettings& settings, SystemStatus& status) {
     data.alertFlags = ALERT_NONE;
     
-    // Environmental alerts
+    // Environmental alerts (only if sensors are valid)
     if (data.sensorsValid) {
         // Temperature alerts
         if (data.temperature > settings.tempMax) {
@@ -48,7 +49,10 @@ void checkAlerts(SensorData& data, SystemSettings& settings) {
         data.alertFlags |= ALERT_LOW_BATTERY;
     }
     
-    // Note: SD card error is set elsewhere when write fails
+    // SD card error check (single location)
+    if (!status.sdWorking) {
+        data.alertFlags |= ALERT_SD_ERROR;
+    }
 }
 
 // =============================================================================
@@ -164,6 +168,10 @@ void handleAlertActions(SensorData& data, SystemSettings& settings) {
     if (data.alertFlags & ALERT_LOW_BATTERY) {
         handleLowBatteryAlert(data.batteryVoltage);
     }
+    
+    if (data.alertFlags & ALERT_SD_ERROR) {
+        handleSDErrorAlert();
+    }
 }
 
 // =============================================================================
@@ -251,6 +259,18 @@ void handleLowBatteryAlert(float voltage) {
         Serial.println(F("Charge or replace battery soon"));
         
         lastAlertTime[6] = currentTime;
+    }
+}
+
+void handleSDErrorAlert() {
+    unsigned long currentTime = millis();
+    
+    if (currentTime - lastAlertTime[7] > ALERT_COOLDOWN) {
+        Serial.println(F("!!! SD CARD ERROR !!!"));
+        Serial.println(F("Data logging unavailable"));
+        Serial.println(F("Check SD card connection"));
+        
+        lastAlertTime[7] = currentTime;
     }
 }
 

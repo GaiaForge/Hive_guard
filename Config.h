@@ -11,11 +11,10 @@
 #include <SPI.h>
 #include <RTClib.h>
 #include <SD.h>
-#include <Adafruit_SH110X.h>
+#include <Adafruit_SH1106G.h>
 #include <Adafruit_GFX.h>
-#include <Adafruit_BMP280.h>
-#include <Adafruit_SHT31.h>
-#include <PDM.h>
+#include <Adafruit_BME280.h>
+
 
 // =============================================================================
 // HARDWARE PINS
@@ -52,9 +51,9 @@ const unsigned long DEBOUNCE_DELAY = 50;       // 50ms
 // =============================================================================
 // AUDIO CONFIGURATION
 // =============================================================================
-
-#define PDM_BUFFER_SIZE 512
-#define AUDIO_SAMPLE_RATE 16000
+#define AUDIO_INPUT_PIN  A4  // MAX9814 microphone input pin
+#define AUDIO_SAMPLE_BUFFER_SIZE 256
+#define AUDIO_SAMPLE_RATE 8000
 
 // =============================================================================
 // DEFAULT SETTINGS
@@ -71,7 +70,6 @@ const unsigned long DEBOUNCE_DELAY = 50;       // 50ms
 #define DEFAULT_HUMIDITY_OFFSET 0.0
 
 // Audio defaults
-#define DEFAULT_MIC_GAIN 5
 #define DEFAULT_AUDIO_SENSITIVITY 5
 
 // Bee frequency ranges (Hz)

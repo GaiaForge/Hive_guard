@@ -18,18 +18,27 @@ struct AudioAnalysis {
 };
 
 // Global audio variables
-extern short sampleBuffer[PDM_BUFFER_SIZE];
+extern int audioBuffer[AUDIO_SAMPLE_BUFFER_SIZE];
+extern volatile int audioSampleIndex;
+
+// Missing variables that were referenced
+extern short* sampleBuffer;
 extern volatile int samplesRead;
 
-// Function declarations
+// Function declarations - CORRECTED SIGNATURES
 void initializeAudio(uint8_t micGain, SystemStatus& status);
-void onPDMdata();
 void processAudio(SensorData& data, SystemSettings& settings);
-AudioAnalysis analyzeAudioBuffer(short* buffer, int samples);
-float estimateSpectralCentroid(short* buffer, int samples);
+
+// Fixed: analyzeAudioBuffer() takes no parameters, uses global audioBuffer
+AudioAnalysis analyzeAudioBuffer();
+
+// Fixed: spectral centroid function name and signature
+float estimateSpectralCentroidOptimized();
+
 uint8_t classifyBeeState(AudioAnalysis& analysis, SystemSettings& settings);
 void runAudioDiagnostics(SystemStatus& status);
 void calibrateAudioLevels(SystemSettings& settings, int durationSeconds);
+
 AbscondingIndicators detectAbscondingRisk(AudioAnalysis& analysis, 
                                           SystemSettings& settings,
                                           uint32_t currentTime);
@@ -38,17 +47,5 @@ void updateDailyPattern(DailyPattern& pattern, uint8_t hour,
 uint8_t detectEnvironmentalStress(SensorData& data, AudioAnalysis& audio,
                                  DailyPattern& pattern, RTC_DS3231& rtc);
 
-// Add to DataLogger.h:
-void logFieldEvent(uint8_t eventType, RTC_DS3231& rtc, SystemStatus& status);
-void generateDailyReport(DateTime date, SensorData& avgData, DailyPattern& pattern,
-                        AbscondingIndicators& risk, SystemStatus& status);
-void generateAlertMessage(char* buffer, size_t bufferSize, 
-                         uint8_t hiveNumber, uint8_t alertType,
-                         SensorData& data);
 
-// Add to Display.h:
-void drawDetailedData(Adafruit_SH1106G& display, SensorData& data, 
-                     SystemStatus& status, AbscondingIndicators& risk);
-void drawDailySummary(Adafruit_SH1106G& display, DailyPattern& pattern,
-                     AbscondingIndicators& indicators);
 #endif // AUDIO_H

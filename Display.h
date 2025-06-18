@@ -15,6 +15,12 @@ void showStartupScreen(Adafruit_SH1106G& display);
 void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode, 
                   SensorData& data, SystemSettings& settings,
                   SystemStatus& status, RTC_DS3231& rtc);
+void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected, 
+                             DateTime dt, bool editMode, int editValue);
+
+void showSensorDiagnosticsScreen(Adafruit_SH1106G& display, SystemStatus& status);
+void updateDiagnosticLine(Adafruit_SH1106G& display, const char* message);
+void checkSDCardAtStartup(Adafruit_SH1106G& display, SystemStatus& status);
 
 // Screen drawing functions
 void drawDashboard(Adafruit_SH1106G& display, SensorData& data, 
@@ -35,5 +41,11 @@ void drawSoundLevelBar(Adafruit_SH1106G& display, int x, int y,
 void drawAlertLine(Adafruit_SH1106G& display, int y, const char* text, 
                   float value, const char* unit);
 void drawBeeIcon(Adafruit_SH1106G& display, int x, int y);
+
+void drawDetailedData(Adafruit_SH1106G& display, SensorData& data, 
+                     SystemStatus& status, AbscondingIndicators& risk);
+void drawDailySummary(Adafruit_SH1106G& display, DailyPattern& pattern,
+                     AbscondingIndicators& indicators);
+
 
 #endif // DISPLAY_H

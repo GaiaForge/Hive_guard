@@ -20,8 +20,8 @@
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Sensors
-Adafruit_BMP280 bmp;
-Adafruit_SHT31 sht;
+Adafruit_BME280 bme;
+
 RTC_DS3231 rtc;
 
 // System settings
@@ -56,50 +56,111 @@ void setup() {
     while (!Serial && millis() < 3000);
     Serial.println(F("=== Kenya Hive Monitor v2.0 ==="));
     
-    delay(2000);
+    delay(1000);
     
+    // Load settings first
     loadSettings(settings);
     
+    // Initialize I2C
     Wire.begin();
     Wire.setClock(100000);
     
+    // Initialize display and show splash screen
     if (display.begin(SCREEN_ADDRESS, true)) {
         systemStatus.displayWorking = true;
         showStartupScreen(display);
+        delay(2000); // Show splash for 2 seconds
     }
     
+    // Now show sensor diagnostics screen
+    showSensorDiagnosticsScreen(display, systemStatus);
+    
+    // Initialize RTC
+    Serial.print(F("Initializing RTC..."));
     if (rtc.begin()) {
         systemStatus.rtcWorking = true;
+        Serial.println(F(" OK"));
+        updateDiagnosticLine(display, "RTC: OK");
+        
         if (rtc.lostPower()) {
             rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+            Serial.println(F("RTC time reset"));
         }
+    } else {
+        Serial.println(F(" FAILED"));
+        updateDiagnosticLine(display, "RTC: FAILED");
     }
+    delay(500);
     
-    initializeSensors(bmp, sht, systemStatus);
-    initializeAudio(settings.micGain, systemStatus);
+    // Initialize sensors
+    Serial.print(F("Initializing BME280..."));
+    initializeSensors(bme, systemStatus);
+
+    if (systemStatus.bmeWorking) {
+        updateDiagnosticLine(display, "BME280: OK");
+    } else {
+        updateDiagnosticLine(display, "BME280: FAILED");
+    }
+    delay(500);
     
+    // Initialize audio
+    Serial.print(F("Initializing Audio..."));
+    initializeAudio(systemStatus);
+    if (systemStatus.pdmWorking) {
+        updateDiagnosticLine(display, "Audio: OK");
+    } else {
+        updateDiagnosticLine(display, "Audio: FAILED");
+    }
+    delay(500);
+    
+    // Initialize buttons
     pinMode(BTN_UP, INPUT_PULLUP);
     pinMode(BTN_DOWN, INPUT_PULLUP);
     pinMode(BTN_SELECT, INPUT_PULLUP);
     pinMode(BTN_BACK, INPUT_PULLUP);
+    updateDiagnosticLine(display, "Buttons: OK");
+    delay(500);
     
+    // Initialize SPI for SD card
     SPI.begin();
-    if (SD.begin(SD_CS_PIN)) {
-        systemStatus.sdWorking = true;
-        createLogFile(rtc, systemStatus);
+    
+    // Check SD card
+    Serial.print(F("Checking SD card..."));
+    checkSDCardAtStartup(display, systemStatus);
+    
+    // Show final status
+    if (systemStatus.sdWorking) {
+        Serial.println(F("System ready with SD logging!"));
+        updateDiagnosticLine(display, "System: READY + SD");
+    } else {
+        Serial.println(F("System ready (no SD logging)"));
+        updateDiagnosticLine(display, "System: READY (no SD)");
     }
     
-    Serial.println(F("System ready!"));
+    delay(2000); // Show final status
     systemStatus.systemReady = true;
     
-    readAllSensors(bmp, sht, currentData, settings, systemStatus);
+    // Take initial sensor reading and show dashboard
+    readAllSensors(bme, currentData, settings, systemStatus);
     updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
 }
 
+// Add to main loop() - periodic SD card checking
 void loop() {
     unsigned long currentTime = millis();
     
-    // Update button states every loop
+    // Periodic SD card check if not working
+    static unsigned long lastSDCheck = 0;
+    if (!systemStatus.sdWorking && (currentTime - lastSDCheck >= 10000)) { // Check every 10 seconds
+        checkSDCard(systemStatus);
+        if (systemStatus.sdWorking) {
+            Serial.println(F("SD card detected and initialized!"));
+            createLogFile(rtc, systemStatus);
+        }
+        lastSDCheck = currentTime;
+    }
+    
+   
     updateButtonStates();
     
     // Handle button presses for main navigation
@@ -127,7 +188,7 @@ void loop() {
                 menuState.settingsMenuActive = true;
                 menuState.menuLevel = 0;
                 menuState.selectedItem = 0;
-                resetButtonStates(); // Prevent button bleed-through
+                resetButtonStates();
             }
         }
         
@@ -145,8 +206,8 @@ void loop() {
     
     // Read sensors
     if (currentTime - lastSensorRead >= SENSOR_INTERVAL) {
-        readAllSensors(bmp, sht, currentData, settings, systemStatus);
-        checkAlerts(currentData, settings);
+        readAllSensors(bme, currentData, settings, systemStatus);
+        checkAlerts(currentData, settings, systemStatus);
         lastSensorRead = currentTime;
     }
     
@@ -156,7 +217,7 @@ void loop() {
         lastAudioSample = currentTime;
     }
     
-    // Data logging
+    // Data logging (only if SD card is working)
     if (settings.logEnabled && systemStatus.sdWorking) {
         unsigned long logIntervalMs = settings.logInterval * 60000UL;
         if (currentTime - lastLogTime >= logIntervalMs) {
@@ -170,9 +231,6 @@ void loop() {
         updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
         lastDisplayUpdate = currentTime;
     }
-    
-    // Optional: Debug button states
-    // printButtonDebug();
     
     delay(10);
 }

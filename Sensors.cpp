@@ -9,87 +9,51 @@
 // SENSOR INITIALIZATION
 // =============================================================================
 
-void initializeSensors(Adafruit_BMP280& bmp, Adafruit_SHT31& sht, SystemStatus& status) {
-    // Initialize BMP280
-    if (bmp.begin(0x77) || bmp.begin(0x76)) {
-        status.bmpWorking = true;
+void initializeSensors(Adafruit_BME280& bme, SystemStatus& status) {
+    // Initialize BME280 (handles temp, humidity, AND pressure)
+    if (bme.begin(0x77) || bme.begin(0x76)) {
+        status.bmeWorking = true;  // Reuse for BME280
         
-        // Configure BMP280
-        bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,
-                        Adafruit_BMP280::SAMPLING_X2,
-                        Adafruit_BMP280::SAMPLING_X16,
-                        Adafruit_BMP280::FILTER_X16,
-                        Adafruit_BMP280::STANDBY_MS_500);
+        // Configure BME280
+        bme.setSampling(Adafruit_BME280::MODE_NORMAL,
+                        Adafruit_BME280::SAMPLING_X2,   // temperature
+                        Adafruit_BME280::SAMPLING_X2,   // pressure  
+                        Adafruit_BME280::SAMPLING_X2,   // humidity
+                        Adafruit_BME280::FILTER_X16,
+                        Adafruit_BME280::STANDBY_MS_500);
         
-        Serial.println(F("BMP280 initialized"));
+        Serial.println(F("BME280 initialized"));
     } else {
-        Serial.println(F("BMP280 not found"));
-    }
-    
-    // Initialize SHT31
-    if (sht.begin(0x44)) {
-        status.shtWorking = true;
-        sht.heater(false);  // Disable heater
-        Serial.println(F("SHT31 initialized"));
-    } else {
-        Serial.println(F("SHT31 not found"));
+        Serial.println(F("BME280 not found"));
+        status.bmeWorking = false;
     }
 }
 
-// =============================================================================
-// SENSOR READING
-// =============================================================================
-
-void readAllSensors(Adafruit_BMP280& bmp, Adafruit_SHT31& sht, 
-                    SensorData& data, SystemSettings& settings, 
-                    SystemStatus& status) {
+void readAllSensors(Adafruit_BME280& bme, SensorData& data, 
+                    SystemSettings& settings, SystemStatus& status) {
     // Read battery first
     readBattery(data);
     
-    // Read environmental sensors
-    bool tempValid = false;
-    bool humidValid = false;
-    bool pressureValid = false;
-    
-    // Read BMP280
-    if (status.bmpWorking) {
-        float bmpTemp = bmp.readTemperature();
-        float bmpPressure = bmp.readPressure() / 100.0;  // Convert to hPa
+    // Read BME280 - gets all three readings from one sensor
+    if (status.bmeWorking) {
+        float temp = bme.readTemperature();
+        float humidity = bme.readHumidity();
+        float pressure = bme.readPressure() / 100.0;  // Convert to hPa
         
-        if (!isnan(bmpTemp) && !isnan(bmpPressure)) {
-            data.temperature = bmpTemp + settings.tempOffset;
-            data.pressure = bmpPressure;
-            tempValid = true;
-            pressureValid = true;
-        }
-    }
-    
-    // Read SHT31
-    if (status.shtWorking) {
-        float shtTemp = sht.readTemperature();
-        float shtHumidity = sht.readHumidity();
-        
-        if (!isnan(shtTemp) && !isnan(shtHumidity)) {
-            // Average temperature if we have both readings
-            if (!tempValid) {
-                data.temperature = shtTemp + settings.tempOffset;
-            } else {
-                // Average the two temperature readings
-                data.temperature = ((data.temperature + shtTemp + settings.tempOffset) / 2.0);
-            }
-            
-            data.humidity = shtHumidity + settings.humidityOffset;
+        if (!isnan(temp) && !isnan(humidity) && !isnan(pressure)) {
+            data.temperature = temp + settings.tempOffset;
+            data.humidity = humidity + settings.humidityOffset;
+            data.pressure = pressure;
             
             // Constrain humidity to valid range
             data.humidity = constrain(data.humidity, 0.0, 100.0);
-            
-            tempValid = true;
-            humidValid = true;
+            data.sensorsValid = true;
+        } else {
+            data.sensorsValid = false;
         }
+    } else {
+        data.sensorsValid = false;
     }
-    
-    // Update sensor validity flag
-    data.sensorsValid = (tempValid && humidValid && pressureValid);
 }
 
 // =============================================================================
@@ -148,32 +112,21 @@ int getBatteryLevel(float voltage) {
 // SENSOR DIAGNOSTICS
 // =============================================================================
 
-void runSensorDiagnostics(Adafruit_BMP280& bmp, Adafruit_SHT31& sht, 
-                         SystemStatus& status) {
+void runSensorDiagnostics(Adafruit_BME280& bme, SystemStatus& status) {
     Serial.println(F("\n=== Sensor Diagnostics ==="));
     
-    // Check BMP280
-    if (status.bmpWorking) {
-        Serial.print(F("BMP280: OK - "));
+    // Check BME280
+    if (status.bmeWorking) {
+        Serial.print(F("BME280: OK - "));
         Serial.print(F("Temp: "));
-        Serial.print(bmp.readTemperature());
-        Serial.print(F("°C, Pressure: "));
-        Serial.print(bmp.readPressure() / 100.0);
+        Serial.print(bme.readTemperature());
+        Serial.print(F("°C, Humidity: "));
+        Serial.print(bme.readHumidity());
+        Serial.print(F("%, Pressure: "));
+        Serial.print(bme.readPressure() / 100.0);
         Serial.println(F(" hPa"));
     } else {
-        Serial.println(F("BMP280: NOT FOUND"));
-    }
-    
-    // Check SHT31
-    if (status.shtWorking) {
-        Serial.print(F("SHT31: OK - "));
-        Serial.print(F("Temp: "));
-        Serial.print(sht.readTemperature());
-        Serial.print(F("°C, Humidity: "));
-        Serial.print(sht.readHumidity());
-        Serial.println(F("%"));
-    } else {
-        Serial.println(F("SHT31: NOT FOUND"));
+        Serial.println(F("BME280: NOT FOUND"));
     }
     
     // Battery status
