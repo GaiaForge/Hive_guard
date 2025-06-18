@@ -21,12 +21,12 @@ struct AudioAnalysis {
 extern int audioBuffer[AUDIO_SAMPLE_BUFFER_SIZE];
 extern volatile int audioSampleIndex;
 
-// Missing variables that were referenced
+
 extern short* sampleBuffer;
 extern volatile int samplesRead;
 
 // Function declarations - CORRECTED SIGNATURES
-void initializeAudio(uint8_t micGain, SystemStatus& status);
+void initializeAudio(SystemStatus& status);
 void processAudio(SensorData& data, SystemSettings& settings);
 
 // Fixed: analyzeAudioBuffer() takes no parameters, uses global audioBuffer

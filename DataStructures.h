@@ -46,6 +46,29 @@ enum DisplayMode {
     MODE_SETTINGS
 };
 
+// Field event types
+enum FieldEvents {
+    EVENT_INSPECTION = 1,
+    EVENT_FEEDING = 2,
+    EVENT_TREATMENT = 3,
+    EVENT_HARVEST = 4,
+    EVENT_QUEEN_SEEN = 5,
+    EVENT_SWARM_CAUGHT = 6,
+    EVENT_ABSCONDED = 7,
+    EVENT_PREDATOR = 8
+};
+
+// Environmental stress factors
+enum StressFactors {
+    STRESS_NONE = 0,
+    STRESS_HEAT = 1,
+    STRESS_COLD = 2,
+    STRESS_HUMIDITY = 4,
+    STRESS_PREDATOR = 8,
+    STRESS_DISEASE = 16,
+    STRESS_HUNGER = 32
+};
+
 // =============================================================================
 // DATA STRUCTURES
 // =============================================================================
@@ -78,6 +101,8 @@ struct SystemSettings {
     
     // System
     uint8_t displayBrightness; // 0-10
+    bool fieldModeEnabled;     // Field mode toggle
+    uint8_t displayTimeoutMin; // Display timeout (minutes)
     uint32_t magicNumber;      // Validation
     uint16_t checksum;         // Simple checksum
 };
@@ -155,27 +180,25 @@ struct DailyPattern {
     bool abnormalPattern;          // Deviation from normal
 };
 
-// Field event types
-enum FieldEvents {
-    EVENT_INSPECTION = 1,
-    EVENT_FEEDING = 2,
-    EVENT_TREATMENT = 3,
-    EVENT_HARVEST = 4,
-    EVENT_QUEEN_SEEN = 5,
-    EVENT_SWARM_CAUGHT = 6,
-    EVENT_ABSCONDED = 7,
-    EVENT_PREDATOR = 8
-};
+// =============================================================================
+// FUNCTION DECLARATIONS
+// =============================================================================
 
-// Environmental stress factors
-enum StressFactors {
-    STRESS_NONE = 0,
-    STRESS_HEAT = 1,
-    STRESS_COLD = 2,
-    STRESS_HUMIDITY = 4,
-    STRESS_PREDATOR = 8,
-    STRESS_DISEASE = 16,
-    STRESS_HUNGER = 32
-};
+// Utility functions for data structures
+void initializeSensorData(SensorData& data);
+void initializeSystemStatus(SystemStatus& status);
+void initializeSystemSettings(SystemSettings& settings);
+void initializeMenuState(MenuState& state);
+void initializeAbscondingIndicators(AbscondingIndicators& indicators);
+void initializeDailyPattern(DailyPattern& pattern);
+
+// Data validation functions
+bool isValidSensorData(const SensorData& data);
+bool isValidSystemSettings(const SystemSettings& settings);
+
+// Data conversion functions
+void copyLogEntry(const SensorData& data, LogEntry& entry, uint32_t timestamp);
+String sensorDataToString(const SensorData& data);
+String systemStatusToString(const SystemStatus& status);
 
 #endif // DATA_STRUCTURES_H

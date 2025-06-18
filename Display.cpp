@@ -90,6 +90,10 @@ void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode,
             drawAlertsScreen(display, data);
             break;
             
+        case MODE_POWER:
+            drawPowerScreen(display, data, settings, status);
+            break;
+            
         case MODE_SETTINGS:
             // Handled by menu system
             break;

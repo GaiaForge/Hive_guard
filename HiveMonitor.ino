@@ -169,16 +169,16 @@ void loop() {
             if (currentMode > 0) {
                 currentMode = (DisplayMode)(currentMode - 1);
             } else {
-                currentMode = MODE_ALERTS;
+                currentMode = MODE_POWER; // Wrap to last screen
             }
             updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
         }
         
         if (wasButtonPressed(1)) { // DOWN
-            if (currentMode < MODE_ALERTS) {
+            if (currentMode < MODE_POWER) {
                 currentMode = (DisplayMode)(currentMode + 1);
             } else {
-                currentMode = MODE_DASHBOARD;
+                currentMode = MODE_DASHBOARD; // Wrap to first screen
             }
             updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
         }
@@ -197,7 +197,7 @@ void loop() {
             updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
         }
     }
-    
+
     // Handle settings menu if active
     if (menuState.settingsMenuActive) {
         handleSettingsMenu(display, menuState, settings, rtc, currentData, systemStatus);

@@ -1,182 +1,344 @@
 /**
- * DataStructures.h
- * Data structures and enumerations
+ * DataStructures.cpp
+ * Data structures utility functions implementation
  */
 
-#ifndef DATA_STRUCTURES_H
-#define DATA_STRUCTURES_H
-
-#include <Arduino.h>
+#include "DataStructures.h"
+#include "Config.h"
 
 // =============================================================================
-// ENUMERATIONS
+// INITIALIZATION FUNCTIONS
 // =============================================================================
 
-// Bee state classification
-enum BeeState {
-    BEE_QUIET = 0,
-    BEE_NORMAL = 1,
-    BEE_ACTIVE = 2,
-    BEE_QUEEN_PRESENT = 3,
-    BEE_QUEEN_MISSING = 4,
-    BEE_PRE_SWARM = 5,
-    BEE_DEFENSIVE = 6,
-    BEE_STRESSED = 7,
-    BEE_UNKNOWN = 8
-};
+void initializeSensorData(SensorData& data) {
+    data.temperature = 0.0;
+    data.humidity = 0.0;
+    data.pressure = 0.0;
+    data.batteryVoltage = 0.0;
+    data.dominantFreq = 0;
+    data.soundLevel = 0;
+    data.beeState = BEE_UNKNOWN;
+    data.alertFlags = ALERT_NONE;
+    data.sensorsValid = false;
+}
 
-// Alert flags (bit flags)
-enum AlertFlags {
-    ALERT_NONE = 0x00,
-    ALERT_TEMP_HIGH = 0x01,
-    ALERT_TEMP_LOW = 0x02,
-    ALERT_HUMIDITY_HIGH = 0x04,
-    ALERT_HUMIDITY_LOW = 0x08,
-    ALERT_QUEEN_ISSUE = 0x10,
-    ALERT_SWARM_RISK = 0x20,
-    ALERT_LOW_BATTERY = 0x40,
-    ALERT_SD_ERROR = 0x80
-};
+void initializeSystemStatus(SystemStatus& status) {
+    status.systemReady = false;
+    status.rtcWorking = false;
+    status.displayWorking = false;
+    status.bmeWorking = false;
+    status.sdWorking = false;
+    status.pdmWorking = false;
+}
 
-// Display modes
-enum DisplayMode {
-    MODE_DASHBOARD,
-    MODE_SOUND,
-    MODE_ALERTS,
-    MODE_SETTINGS
-};
+void initializeSystemSettings(SystemSettings& settings) {
+    settings.tempOffset = DEFAULT_TEMP_OFFSET;
+    settings.humidityOffset = DEFAULT_HUMIDITY_OFFSET;
+    settings.audioSensitivity = DEFAULT_AUDIO_SENSITIVITY;
+    settings.queenFreqMin = DEFAULT_QUEEN_FREQ_MIN;
+    settings.queenFreqMax = DEFAULT_QUEEN_FREQ_MAX;
+    settings.swarmFreqMin = DEFAULT_SWARM_FREQ_MIN;
+    settings.swarmFreqMax = DEFAULT_SWARM_FREQ_MAX;
+    settings.stressThreshold = DEFAULT_STRESS_THRESHOLD;
+    settings.logInterval = DEFAULT_LOG_INTERVAL;
+    settings.logEnabled = DEFAULT_LOG_ENABLED;
+    settings.tempMin = DEFAULT_TEMP_MIN;
+    settings.tempMax = DEFAULT_TEMP_MAX;
+    settings.humidityMin = DEFAULT_HUMIDITY_MIN;
+    settings.humidityMax = DEFAULT_HUMIDITY_MAX;
+    settings.displayBrightness = DEFAULT_DISPLAY_BRIGHTNESS;
+    settings.magicNumber = SETTINGS_MAGIC_NUMBER;
+    settings.checksum = 0;
+}
 
-// =============================================================================
-// DATA STRUCTURES
-// =============================================================================
+void initializeMenuState(MenuState& state) {
+    state.settingsMenuActive = false;
+    state.menuLevel = 0;
+    state.selectedItem = 0;
+    state.editingItem = 0;
+    state.editFloatValue = 0.0;
+    state.editIntValue = 0;
+}
 
-// System settings structure
-struct SystemSettings {
-    // Sensor calibration
-    float tempOffset;           // -10.0 to +10.0°C
-    float humidityOffset;       // -20.0 to +20.0%
-    
-    // Audio settings
-    uint8_t micGain;           // 0-10
-    uint8_t audioSensitivity;  // 0-10
-    
-    // Classification thresholds
-    uint16_t queenFreqMin;     // Hz
-    uint16_t queenFreqMax;     // Hz
-    uint16_t swarmFreqMin;     // Hz
-    uint16_t swarmFreqMax;     // Hz
-    uint8_t stressThreshold;   // 0-100
-    
-    // Logging
-    uint8_t logInterval;       // 5, 10, 30, 60 minutes
-    bool logEnabled;
-    
-    // Alert thresholds
-    float tempMin;
-    float tempMax;
-    float humidityMin;
-    float humidityMax;
-    
-    // System
-    uint8_t displayBrightness; // 0-10
-    uint32_t magicNumber;      // Validation
-    uint16_t checksum;         // Simple checksum
-};
+void initializeAbscondingIndicators(AbscondingIndicators& indicators) {
+    indicators.queenSilent = false;
+    indicators.increasedActivity = false;
+    indicators.erraticPattern = false;
+    indicators.riskLevel = 0;
+    indicators.lastQueenDetected = 0;
+}
 
-// Sensor data structure
-struct SensorData {
-    // Environmental
-    float temperature;
-    float humidity;
-    float pressure;
-    float batteryVoltage;
-    
-    // Audio analysis
-    uint16_t dominantFreq;
-    uint8_t soundLevel;
-    uint8_t beeState;
-    
-    // Status
-    uint8_t alertFlags;
-    bool sensorsValid;
-};
-
-// System status
-struct SystemStatus {
-    bool systemReady;
-    bool rtcWorking;
-    bool displayWorking;
-    bool bmeWorking;   
-    bool sdWorking;
-    bool pdmWorking;
-};
-
-// Menu state
-struct MenuState {
-    bool settingsMenuActive;
-    int menuLevel;
-    int selectedItem;
-    int editingItem;
-    float editFloatValue;
-    int editIntValue;
-};
-
-// Log entry structure (for reference)
-struct LogEntry {
-    uint32_t unixTime;
-    float temperature;
-    float humidity;
-    float pressure;
-    uint16_t dominantFreq;
-    uint8_t soundLevel;
-    uint8_t beeState;
-    float batteryVoltage;
-    uint8_t alertFlags;
-};
+void initializeDailyPattern(DailyPattern& pattern) {
+    // Initialize hourly arrays
+    for (int i = 0; i < 24; i++) {
+        pattern.hourlyActivity[i] = 0;
+        pattern.hourlyTemperature[i] = 0;
+    }
+    pattern.peakActivityTime = 12; // Default to noon
+    pattern.quietestTime = 3;      // Default to 3 AM
+    pattern.abnormalPattern = false;
+}
 
 // =============================================================================
-// ABSCONDING DETECTION STRUCTURES
+// VALIDATION FUNCTIONS
 // =============================================================================
 
-// Indicators for absconding risk
-struct AbscondingIndicators {
-    bool queenSilent;           // No queen sounds detected
-    bool increasedActivity;     // Higher than normal frequency
-    bool erraticPattern;        // Irregular sound patterns
-    uint8_t riskLevel;         // 0-100%
-    uint32_t lastQueenDetected; // Timestamp of last queen sound
-};
+bool isValidSensorData(const SensorData& data) {
+    // Check temperature range
+    if (data.temperature < -50.0 || data.temperature > 100.0) {
+        return false;
+    }
+    
+    // Check humidity range
+    if (data.humidity < 0.0 || data.humidity > 100.0) {
+        return false;
+    }
+    
+    // Check pressure range (typical atmospheric pressure range)
+    if (data.pressure < 300.0 || data.pressure > 1100.0) {
+        return false;
+    }
+    
+    // Check battery voltage range
+    if (data.batteryVoltage < 0.0 || data.batteryVoltage > 5.0) {
+        return false;
+    }
+    
+    // Check frequency range
+    if (data.dominantFreq > 2000) {
+        return false;
+    }
+    
+    // Check sound level range
+    if (data.soundLevel > 100) {
+        return false;
+    }
+    
+    // Check bee state range
+    if (data.beeState > BEE_UNKNOWN) {
+        return false;
+    }
+    
+    return true;
+}
 
-// Daily activity pattern tracking
-struct DailyPattern {
-    uint8_t hourlyActivity[24];    // Average activity per hour
-    uint8_t hourlyTemperature[24]; // Average temp per hour
-    uint16_t peakActivityTime;     // Hour with most activity
-    uint16_t quietestTime;         // Hour with least activity
-    bool abnormalPattern;          // Deviation from normal
-};
+bool isValidSystemSettings(const SystemSettings& settings) {
+    // Check temperature offset range
+    if (settings.tempOffset < -10.0 || settings.tempOffset > 10.0) {
+        return false;
+    }
+    
+    // Check humidity offset range
+    if (settings.humidityOffset < -20.0 || settings.humidityOffset > 20.0) {
+        return false;
+    }
+    
+    // Check audio sensitivity range
+    if (settings.audioSensitivity > 10) {
+        return false;
+    }
+    
+    // Check frequency ranges
+    if (settings.queenFreqMin >= settings.queenFreqMax) {
+        return false;
+    }
+    
+    if (settings.swarmFreqMin >= settings.swarmFreqMax) {
+        return false;
+    }
+    
+    // Check stress threshold
+    if (settings.stressThreshold > 100) {
+        return false;
+    }
+    
+    // Check log interval
+    if (settings.logInterval != 5 && settings.logInterval != 10 && 
+        settings.logInterval != 30 && settings.logInterval != 60) {
+        return false;
+    }
+    
+    // Check temperature thresholds
+    if (settings.tempMin >= settings.tempMax) {
+        return false;
+    }
+    
+    // Check humidity thresholds
+    if (settings.humidityMin >= settings.humidityMax) {
+        return false;
+    }
+    
+    // Check display brightness
+    if (settings.displayBrightness < 1 || settings.displayBrightness > 10) {
+        return false;
+    }
+    
+    // Check magic number
+    if (settings.magicNumber != SETTINGS_MAGIC_NUMBER) {
+        return false;
+    }
+    
+    return true;
+}
 
-// Field event types
-enum FieldEvents {
-    EVENT_INSPECTION = 1,
-    EVENT_FEEDING = 2,
-    EVENT_TREATMENT = 3,
-    EVENT_HARVEST = 4,
-    EVENT_QUEEN_SEEN = 5,
-    EVENT_SWARM_CAUGHT = 6,
-    EVENT_ABSCONDED = 7,
-    EVENT_PREDATOR = 8
-};
+// =============================================================================
+// DATA CONVERSION FUNCTIONS
+// =============================================================================
 
-// Environmental stress factors
-enum StressFactors {
-    STRESS_NONE = 0,
-    STRESS_HEAT = 1,
-    STRESS_COLD = 2,
-    STRESS_HUMIDITY = 4,
-    STRESS_PREDATOR = 8,
-    STRESS_DISEASE = 16,
-    STRESS_HUNGER = 32
-};
+void copyLogEntry(const SensorData& data, LogEntry& entry, uint32_t timestamp) {
+    entry.unixTime = timestamp;
+    entry.temperature = data.temperature;
+    entry.humidity = data.humidity;
+    entry.pressure = data.pressure;
+    entry.dominantFreq = data.dominantFreq;
+    entry.soundLevel = data.soundLevel;
+    entry.beeState = data.beeState;
+    entry.batteryVoltage = data.batteryVoltage;
+    entry.alertFlags = data.alertFlags;
+}
 
-#endif // DATA_STRUCTURES_H
+String sensorDataToString(const SensorData& data) {
+    String result = "";
+    
+    result += "T:" + String(data.temperature, 1) + "C ";
+    result += "H:" + String(data.humidity, 1) + "% ";
+    result += "P:" + String(data.pressure, 1) + "hPa ";
+    result += "F:" + String(data.dominantFreq) + "Hz ";
+    result += "L:" + String(data.soundLevel) + "% ";
+    result += "B:" + String(data.batteryVoltage, 2) + "V ";
+    result += "State:" + String(data.beeState) + " ";
+    result += "Alerts:0x" + String(data.alertFlags, HEX);
+    
+    return result;
+}
+
+String systemStatusToString(const SystemStatus& status) {
+    String result = "Status: ";
+    
+    if (status.systemReady) result += "READY ";
+    else result += "INIT ";
+    
+    result += "RTC:";
+    result += status.rtcWorking ? "OK " : "FAIL ";
+    
+    result += "DISP:";
+    result += status.displayWorking ? "OK " : "FAIL ";
+    
+    result += "BME:";
+    result += status.bmeWorking ? "OK " : "FAIL ";
+    
+    result += "SD:";
+    result += status.sdWorking ? "OK " : "FAIL ";
+    
+    result += "MIC:";
+    result += status.pdmWorking ? "OK" : "FAIL";
+    
+    return result;
+}
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+void resetSensorData(SensorData& data) {
+    // Keep the last known valid readings but reset flags
+    data.alertFlags = ALERT_NONE;
+    data.sensorsValid = false;
+    data.beeState = BEE_UNKNOWN;
+}
+
+void updateAbscondingRisk(AbscondingIndicators& indicators, uint32_t currentTime) {
+    // Calculate time since last queen detection
+    uint32_t timeSinceQueen = currentTime - indicators.lastQueenDetected;
+    
+    // Reset risk level calculation
+    indicators.riskLevel = 0;
+    
+    // Queen silent for over 1 hour
+    if (timeSinceQueen > 3600000) { // 1 hour in milliseconds
+        indicators.queenSilent = true;
+        indicators.riskLevel += 40;
+    } else {
+        indicators.queenSilent = false;
+    }
+    
+    // Add other risk factors
+    if (indicators.increasedActivity) {
+        indicators.riskLevel += 30;
+    }
+    
+    if (indicators.erraticPattern) {
+        indicators.riskLevel += 30;
+    }
+    
+    // Cap at 100%
+    if (indicators.riskLevel > 100) {
+        indicators.riskLevel = 100;
+    }
+}
+
+void updateDailyPatternHour(DailyPattern& pattern, uint8_t hour, 
+                           uint8_t activity, uint8_t temperature) {
+    if (hour >= 24) return; // Invalid hour
+    
+    // Update with moving average (weight new reading at 25%)
+    pattern.hourlyActivity[hour] = (pattern.hourlyActivity[hour] * 3 + activity) / 4;
+    pattern.hourlyTemperature[hour] = (pattern.hourlyTemperature[hour] * 3 + temperature) / 4;
+    
+    // Find new peak and quiet times
+    uint8_t maxActivity = 0;
+    uint8_t minActivity = 255;
+    
+    for (int i = 0; i < 24; i++) {
+        if (pattern.hourlyActivity[i] > maxActivity) {
+            maxActivity = pattern.hourlyActivity[i];
+            pattern.peakActivityTime = i;
+        }
+        if (pattern.hourlyActivity[i] < minActivity && pattern.hourlyActivity[i] > 0) {
+            minActivity = pattern.hourlyActivity[i];
+            pattern.quietestTime = i;
+        }
+    }
+    
+    // Check for abnormal patterns
+    pattern.abnormalPattern = false;
+    
+    // Peak activity should be during day (9-17)
+    if (pattern.peakActivityTime < 9 || pattern.peakActivityTime > 17) {
+        pattern.abnormalPattern = true;
+    }
+    
+    // Should be quiet at night (22-5)
+    if ((hour >= 22 || hour <= 5) && activity > 50) {
+        pattern.abnormalPattern = true;
+    }
+}
+
+// =============================================================================
+// DIAGNOSTIC FUNCTIONS
+// =============================================================================
+
+void printSensorData(const SensorData& data) {
+    Serial.println(F("=== Sensor Data ==="));
+    Serial.print(F("Temperature: ")); Serial.print(data.temperature); Serial.println(F("°C"));
+    Serial.print(F("Humidity: ")); Serial.print(data.humidity); Serial.println(F("%"));
+    Serial.print(F("Pressure: ")); Serial.print(data.pressure); Serial.println(F(" hPa"));
+    Serial.print(F("Battery: ")); Serial.print(data.batteryVoltage); Serial.println(F("V"));
+    Serial.print(F("Frequency: ")); Serial.print(data.dominantFreq); Serial.println(F(" Hz"));
+    Serial.print(F("Sound Level: ")); Serial.print(data.soundLevel); Serial.println(F("%"));
+    Serial.print(F("Bee State: ")); Serial.println(data.beeState);
+    Serial.print(F("Alert Flags: 0x")); Serial.println(data.alertFlags, HEX);
+    Serial.print(F("Sensors Valid: ")); Serial.println(data.sensorsValid ? "YES" : "NO");
+    Serial.println(F("=================="));
+}
+
+void printSystemStatus(const SystemStatus& status) {
+    Serial.println(F("=== System Status ==="));
+    Serial.print(F("System Ready: ")); Serial.println(status.systemReady ? "YES" : "NO");
+    Serial.print(F("RTC Working: ")); Serial.println(status.rtcWorking ? "YES" : "NO");
+    Serial.print(F("Display Working: ")); Serial.println(status.displayWorking ? "YES" : "NO");
+    Serial.print(F("BME Working: ")); Serial.println(status.bmeWorking ? "YES" : "NO");
+    Serial.print(F("SD Working: ")); Serial.println(status.sdWorking ? "YES" : "NO");
+    Serial.print(F("Microphone Working: ")); Serial.println(status.pdmWorking ? "YES" : "NO");
+    Serial.println(F("====================="));
+}

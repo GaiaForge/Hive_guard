@@ -85,6 +85,8 @@ const unsigned long DEBOUNCE_DELAY = 50;       // 50ms
 
 // System defaults
 #define DEFAULT_DISPLAY_BRIGHTNESS 7
+#define DEFAULT_FIELD_MODE_ENABLED false
+#define DEFAULT_DISPLAY_TIMEOUT_MIN 5
 
 // =============================================================================
 // SYSTEM CONSTANTS

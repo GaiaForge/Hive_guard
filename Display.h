@@ -28,7 +28,9 @@ void drawDashboard(Adafruit_SH1106G& display, SensorData& data,
 void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data, 
                     SystemSettings& settings);
 void drawAlertsScreen(Adafruit_SH1106G& display, SensorData& data);
-
+void drawPowerScreen(Adafruit_SH1106G& display, SensorData& data, 
+                    SystemSettings& settings, SystemStatus& status);
+                    
 // UI component functions
 void drawHeader(Adafruit_SH1106G& display, SensorData& data, SystemStatus& status);
 void drawTimeDate(Adafruit_SH1106G& display, int y, RTC_DS3231& rtc, 

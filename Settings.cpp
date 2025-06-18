@@ -33,6 +33,8 @@ SystemSettings getDefaultSettings() {
     defaults.humidityMin = DEFAULT_HUMIDITY_MIN;
     defaults.humidityMax = DEFAULT_HUMIDITY_MAX;
     defaults.displayBrightness = DEFAULT_DISPLAY_BRIGHTNESS;
+    defaults.fieldModeEnabled = DEFAULT_FIELD_MODE_ENABLED;
+    defaults.displayTimeoutMin = DEFAULT_DISPLAY_TIMEOUT_MIN;
     defaults.magicNumber = SETTINGS_MAGIC_NUMBER;
     
     return defaults;
@@ -196,9 +198,7 @@ void exportSettingsToSD(SystemSettings& settings) {
         exportFile.println(settings.humidityOffset);
         exportFile.println();
         
-        exportFile.println(F("[Audio Settings]"));
-        exportFile.print(F("MicGain="));
-        exportFile.println(settings.micGain);
+        exportFile.println(F("[Audio Settings]"));        
         exportFile.print(F("AudioSensitivity="));
         exportFile.println(settings.audioSensitivity);
         exportFile.print(F("QueenFreqMin="));

@@ -13,7 +13,7 @@ const int SENSOR_CALIB_ITEMS = 2;
 const int AUDIO_SETTINGS_ITEMS = 7;
 const int LOGGING_ITEMS = 2;
 const int ALERT_ITEMS = 4;
-const int SYSTEM_ITEMS = 1;
+const int SYSTEM_ITEMS = 2;  // Brightness + Field Mode
 
 // =============================================================================
 // MENU NAVIGATION
