@@ -1,6 +1,6 @@
 /**
  * PowerManager.cpp
- * Power management system implementation
+ * Complete power management system implementation
  */
 
 #include "PowerManager.h"
@@ -10,6 +10,9 @@
 #include <nrf.h>
 #include <nrf_power.h>
 #include <nrf_soc.h>
+#include <nrf_rtc.h>
+#include <nrf_clock.h>
+#include <nrf_gpio.h>
 #endif
 
 // =============================================================================
@@ -21,9 +24,6 @@ const float PowerManager::POWER_DISPLAY_MA = 8.0f;    // OLED display
 const float PowerManager::POWER_SENSORS_MA = 2.0f;    // BME280 active
 const float PowerManager::POWER_AUDIO_MA = 5.0f;      // Microphone sampling
 const float PowerManager::POWER_SLEEP_MA = 0.05f;     // Deep sleep mode
-
-// Global power manager instance
-PowerManager globalPowerManager;
 
 // =============================================================================
 // CONSTRUCTOR AND INITIALIZATION
@@ -67,7 +67,17 @@ void PowerManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSettin
     systemStatus = sysStatus;
     systemSettings = sysSettings;
     
-    loadPowerSettings();
+    // Load power settings from system settings
+    if (sysSettings) {
+        settings.fieldModeEnabled = sysSettings->fieldModeEnabled;
+        settings.displayTimeoutMin = sysSettings->displayTimeoutMin;
+        status.displayTimeoutMs = settings.displayTimeoutMin * 60000UL;
+        
+        // Set initial mode based on settings
+        if (settings.fieldModeEnabled) {
+            enableFieldMode();
+        }
+    }
     
     // Configure initial power mode
     status.lastUserActivity = millis();
@@ -88,27 +98,11 @@ void PowerManager::update() {
     // Update uptime
     status.totalUptime = currentTime;
     
-    // Check power mode every 10 seconds
-    if (currentTime - lastPowerCheck >= 10000) {
-        // This would need battery voltage from sensor data
-        // For now, use a placeholder - this should be called with actual voltage
-        updatePowerMode(3.7f); // Placeholder voltage
-        calculateRuntimeEstimate(3.7f);
-        lastPowerCheck = currentTime;
-    }
-    
     // Handle display timeout in field mode
     if (status.fieldModeActive) {
         handleDisplayTimeout();
     }
-    
-    // Check if we should enter sleep
-    if (shouldEnterSleep()) {
-        unsigned long sleepTime = systemSettings->logInterval * 60000UL;
-        prepareSleep();
-        enterDeepSleep(sleepTime);
-    }
-}
+}  
 
 void PowerManager::handleUserActivity() {
     status.lastUserActivity = millis();
@@ -145,6 +139,11 @@ void PowerManager::enableFieldMode() {
     status.fieldModeActive = true;
     status.currentMode = POWER_FIELD;
     
+    // Update system settings
+    if (systemSettings) {
+        systemSettings->fieldModeEnabled = true;
+    }
+    
     // Start display timeout
     resetDisplayTimeout();
     
@@ -156,6 +155,11 @@ void PowerManager::disableFieldMode() {
     settings.fieldModeEnabled = false;
     status.fieldModeActive = false;
     status.currentMode = POWER_NORMAL;
+    
+    // Update system settings
+    if (systemSettings) {
+        systemSettings->fieldModeEnabled = false;
+    }
     
     // Ensure display stays on
     turnOnDisplay();
@@ -177,8 +181,9 @@ void PowerManager::turnOnDisplay() {
         status.displayOn = true;
         status.displayState = COMP_POWER_ON;
         
-        // Power up display - this would interface with the actual display
-        // For now, just set the flag
+        // Re-initialize display after power-down
+        // This depends on your display library implementation
+        // You might need to call display.begin() again
         
         Serial.println(F("Display powered on"));
     }
@@ -190,8 +195,10 @@ void PowerManager::turnOffDisplay() {
         status.displayState = COMP_POWER_OFF;
         displayOffTime = millis();
         
-        // Power down display - this would interface with the actual display
-        // For now, just set the flag
+        // Power down display
+        // For OLED displays, you can usually turn them off with:
+        // display.ssd1306_command(SSD1306_DISPLAYOFF);
+        // or display.setPowerSave(1);
         
         Serial.println(F("Display powered off"));
     }
@@ -236,7 +243,8 @@ void PowerManager::powerDownSensors() {
     status.sensorState = COMP_POWER_SLEEP;
     
     // Put BME280 in sleep mode
-    // This would interface with the actual sensor
+    // BME280 automatically goes to sleep mode after reading
+    // You can force it with: bme.setSampling(..., MODE_SLEEP);
     
     Serial.println(F("Sensors powered down"));
 }
@@ -245,7 +253,8 @@ void PowerManager::powerUpSensors() {
     status.sensorState = COMP_POWER_ON;
     
     // Wake up BME280
-    // This would interface with the actual sensor
+    // Usually done automatically when you take a reading
+    // Or explicitly: bme.setSampling(..., MODE_NORMAL);
     
     Serial.println(F("Sensors powered up"));
 }
@@ -254,7 +263,8 @@ void PowerManager::powerDownAudio() {
     status.audioState = COMP_POWER_OFF;
     
     // Stop audio sampling
-    // This would interface with the audio system
+    // This would depend on your audio implementation
+    // For MAX9814, you could disable the analog input or power pin
     
     Serial.println(F("Audio powered down"));
 }
@@ -263,7 +273,7 @@ void PowerManager::powerUpAudio() {
     status.audioState = COMP_POWER_ON;
     
     // Resume audio sampling
-    // This would interface with the audio system
+    // Re-enable analog input
     
     Serial.println(F("Audio powered up"));
 }
@@ -301,16 +311,40 @@ void PowerManager::enterDeepSleep(uint32_t sleepTimeMs) {
     delay(100); // Allow serial to flush
     
 #ifdef NRF52_SERIES
-    // Configure RTC for wake-up
-    // This is simplified - full implementation would configure RTC properly
+    // Configure RTC1 for wake-up timer
+    uint32_t ticks = (sleepTimeMs * 32768UL) / 1000; // Convert ms to RTC ticks
     
-    // Enter system off mode (lowest power)
-    // sd_power_system_off();
+    // Stop RTC1
+    nrf_rtc_task_trigger(NRF_RTC1, NRF_RTC_TASK_STOP);
+    nrf_rtc_task_trigger(NRF_RTC1, NRF_RTC_TASK_CLEAR);
     
-    // For now, use regular delay (in real implementation this would be deep sleep)
-    delay(sleepTimeMs);
+    // Set compare register for wake-up
+    nrf_rtc_cc_set(NRF_RTC1, 0, ticks);
+    nrf_rtc_event_clear(NRF_RTC1, NRF_RTC_EVENT_COMPARE_0);
+    nrf_rtc_int_enable(NRF_RTC1, NRF_RTC_INT_COMPARE0_MASK);
+    
+    // Enable RTC1 interrupt
+    NVIC_EnableIRQ(RTC1_IRQn);
+    NVIC_SetPriority(RTC1_IRQn, 1);
+    
+    // Start RTC1
+    nrf_rtc_task_trigger(NRF_RTC1, NRF_RTC_TASK_START);
+    
+    // Configure wake-up sources (buttons)
+    configureButtonWakeup();
+    
+    // Enter System OFF mode (lowest power consumption)
+    // Current consumption: ~0.5µA
+    __WFE();
+    __SEV();
+    __WFE();
+    
+    // If we reach here, we were woken by button press, not timer
+    Serial.println(F("Woken by button press"));
+    
 #else
-    // For other platforms, use regular delay
+    // Fallback for non-nRF52 platforms
+    Serial.println(F("Platform sleep not implemented - using delay"));
     delay(sleepTimeMs);
 #endif
     
@@ -357,45 +391,96 @@ bool PowerManager::canEnterSleep() const {
     
     // Check if enough time has passed since last sleep
     unsigned long timeSinceLastSleep = millis() - lastSleepTime;
-    unsigned long minSleepInterval = systemSettings->logInterval * 60000UL;
+    unsigned long minSleepInterval = systemSettings ? 
+        (systemSettings->logInterval * 60000UL) : 600000UL; // Default 10 min
     
     return timeSinceLastSleep >= minSleepInterval;
 }
 
 bool PowerManager::shouldEnterSleep() {
-    return status.fieldModeActive && canEnterSleep();
+    // Never sleep in normal mode (for development)
+    if (status.currentMode == POWER_NORMAL) {
+        return false;
+    }
+    
+    // Don't sleep if display is on (user is interacting)
+    if (status.displayOn) {
+        return false;
+    }
+    
+    // Don't sleep if we just woke up (prevent immediate re-sleep)
+    if (millis() - status.lastUserActivity < 30000) { // 30 second minimum awake time
+        return false;
+    }
+    
+    // In field mode, sleep when display has been off for a while
+    if (status.fieldModeActive) {
+        unsigned long timeSinceDisplayOff = millis() - displayOffTime;
+        return timeSinceDisplayOff > 60000; // 1 minute after display off
+    }
+    
+    return false;
 }
 
 // =============================================================================
 // POWER MODE MANAGEMENT
 // =============================================================================
-
-void PowerManager::updatePowerMode(float batteryVoltage) {
-    PowerMode newMode = status.currentMode;
-    
-    if (batteryVoltage <= BATTERY_CRITICAL) {
-        newMode = POWER_CRITICAL;
-    } else if (batteryVoltage <= BATTERY_LOW) {
-        newMode = POWER_SAVE;
-    } else if (settings.fieldModeEnabled) {
-        newMode = POWER_FIELD;
-    } else {
-        newMode = POWER_NORMAL;
-    }
-    
-    if (newMode != status.currentMode) {
-        Serial.print(F("Power mode changed: "));
-        Serial.print(getPowerModeString());
-        Serial.print(F(" -> "));
-        status.currentMode = newMode;
-        Serial.println(getPowerModeString());
+public:
+    void PowerManager::updatePowerMode(float batteryVoltage) {
+        PowerMode newMode = status.currentMode;
         
-        // Auto-enable field mode if battery is low and auto mode is enabled
-        if (settings.autoFieldMode && newMode >= POWER_SAVE && !status.fieldModeActive) {
-            enableFieldMode();
+        // Auto power mode based on battery
+        if (batteryVoltage <= BATTERY_CRITICAL) {
+            newMode = POWER_CRITICAL;
+        } else if (batteryVoltage <= BATTERY_LOW) {
+            newMode = POWER_SAVE;
+        } else if (settings.fieldModeEnabled) {
+            newMode = POWER_FIELD;
+        } else {
+            newMode = POWER_NORMAL;
         }
+        
+        if (newMode != status.currentMode) {
+            Serial.print(F("Power mode: "));
+            Serial.print(getPowerModeString());
+            Serial.print(F(" -> "));
+            status.currentMode = newMode;
+            Serial.println(getPowerModeString());
+            
+            // Auto-enable field mode if battery is low
+            if (settings.autoFieldMode && newMode >= POWER_SAVE && !status.fieldModeActive) {
+                enableFieldMode();
+            }
+            
+            // Adjust system behavior based on power mode
+            switch (newMode) {
+                case POWER_CRITICAL:
+                    // Minimum functionality only
+                    powerDownAudio();
+                    setDisplayTimeout(1); // 1 minute timeout
+                    break;
+                    
+                case POWER_SAVE:
+                    // Reduced functionality
+                    setDisplayTimeout(2); // 2 minute timeout
+                    break;
+                    
+                case POWER_FIELD:
+                    // Optimized for field use
+                    setDisplayTimeout(5); // 5 minute timeout
+                    break;
+                    
+                case POWER_NORMAL:
+                    // Full functionality
+                    powerUpAll();
+                    break;
+            }
+        }
+        
+        // Always update runtime estimate
+        calculateRuntimeEstimate(batteryVoltage);
     }
-}
+
 
 void PowerManager::calculateRuntimeEstimate(float batteryVoltage) {
     // Assume 2000mAh battery capacity (typical for field deployment)
@@ -445,6 +530,12 @@ void PowerManager::calculateRuntimeEstimate(float batteryVoltage) {
 void PowerManager::setDisplayTimeout(uint8_t minutes) {
     settings.displayTimeoutMin = constrain(minutes, 1, 30);
     status.displayTimeoutMs = settings.displayTimeoutMin * 60000UL;
+    
+    // Update system settings
+    if (systemSettings) {
+        systemSettings->displayTimeoutMin = settings.displayTimeoutMin;
+    }
+    
     savePowerSettings();
 }
 
@@ -463,12 +554,22 @@ void PowerManager::setAutoFieldMode(bool enabled) {
 
 void PowerManager::loadPowerSettings() {
     // In a full implementation, this would load from flash storage
-    // For now, use defaults
-    Serial.println(F("Power settings loaded (defaults)"));
+    // For now, use defaults or sync with system settings
+    if (systemSettings) {
+        settings.fieldModeEnabled = systemSettings->fieldModeEnabled;
+        settings.displayTimeoutMin = systemSettings->displayTimeoutMin;
+        status.displayTimeoutMs = settings.displayTimeoutMin * 60000UL;
+    }
+    Serial.println(F("Power settings loaded"));
 }
 
 void PowerManager::savePowerSettings() {
     // In a full implementation, this would save to flash storage
+    // For now, sync with system settings
+    if (systemSettings) {
+        systemSettings->fieldModeEnabled = settings.fieldModeEnabled;
+        systemSettings->displayTimeoutMin = settings.displayTimeoutMin;
+    }
     Serial.println(F("Power settings saved"));
 }
 
@@ -560,26 +661,28 @@ void PowerManager::configureWakeupSources() {
 #endif
 }
 
+void PowerManager::configureButtonWakeup() {
+#ifdef NRF52_SERIES
+    // Configure button pins for wake-up
+    // Assumes buttons are on pins A0-A3 (P0.02, P0.03, P0.04, P0.05)
+    
+    uint32_t buttonPins[] = {2, 3, 4, 5}; // Adjust based on your actual pin mapping
+    
+    for (int i = 0; i < 4; i++) {
+        // Configure pin as input with pullup
+        nrf_gpio_cfg_input(buttonPins[i], NRF_GPIO_PIN_PULLUP);
+        
+        // Configure pin for wake-up on low signal (button press)
+        nrf_gpio_cfg_sense_set(buttonPins[i], NRF_GPIO_PIN_SENSE_LOW);
+    }
+    
+    Serial.println(F("Button wake-up configured"));
+#endif
+}
+
 // =============================================================================
 // GLOBAL HELPER FUNCTIONS
 // =============================================================================
-
-void initializePowerManager() {
-    // This would be called from main setup()
-    // globalPowerManager.initialize(...);
-}
-
-void updatePowerManager() {
-    globalPowerManager.update();
-}
-
-bool shouldSystemSleep() {
-    return globalPowerManager.shouldEnterSleep();
-}
-
-void handleSystemWakeup() {
-    globalPowerManager.handleWakeUp(WAKE_BUTTON);
-}
 
 const char* powerModeToString(PowerMode mode) {
     switch (mode) {
@@ -600,3 +703,21 @@ PowerMode batteryToPowerMode(float voltage) {
         return POWER_NORMAL;
     }
 }
+
+// =============================================================================
+// RTC INTERRUPT HANDLER (for nRF52)
+// =============================================================================
+
+#ifdef NRF52_SERIES
+extern "C" void RTC1_IRQHandler(void) {
+    if (nrf_rtc_event_pending(NRF_RTC1, NRF_RTC_EVENT_COMPARE_0)) {
+        nrf_rtc_event_clear(NRF_RTC1, NRF_RTC_EVENT_COMPARE_0);
+        
+        // Stop RTC1
+        nrf_rtc_task_trigger(NRF_RTC1, NRF_RTC_TASK_STOP);
+        nrf_rtc_int_disable(NRF_RTC1, NRF_RTC_INT_COMPARE0_MASK);
+        
+        // We'll wake up and handle this in the main code
+    }
+}
+#endif

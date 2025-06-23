@@ -12,6 +12,16 @@
 // Use SDLib namespace to avoid ambiguity
 using SDFile = SDLib::File;
 
+// Emergency data buffer for SD failures
+struct DataBuffer {
+    SensorData readings[20];  // Buffer 20 readings (3+ hours at 10min intervals)
+    uint8_t count;
+    uint8_t writeIndex;
+    bool full;
+};
+
+
+
 // Function declarations
 void createLogFile(RTC_DS3231& rtc, SystemStatus& status);
 void logData(SensorData& data, RTC_DS3231& rtc, SystemSettings& settings, 
@@ -31,5 +41,8 @@ void generateDailyReport(DateTime date, SensorData& avgData, DailyPattern& patte
 void generateAlertMessage(char* buffer, size_t bufferSize, 
                          uint8_t hiveNumber, uint8_t alertType,
                          SensorData& data);
-
+// Add these to DataLogger.h after the existing declarations:
+void storeInBuffer(const SensorData& data);
+void flushBufferedData(RTC_DS3231& rtc, SystemSettings& settings, SystemStatus& status);
+bool hasBufferedData();
 #endif // DATA_LOGGER_H

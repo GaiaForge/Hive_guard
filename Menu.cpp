@@ -6,6 +6,7 @@
 #include "Menu.h"
 #include "Settings.h"
 #include "Utils.h"
+#include "PowerManager.h"  
 
 // Menu item counts
 const int MAIN_MENU_ITEMS = 6;
@@ -13,7 +14,10 @@ const int SENSOR_CALIB_ITEMS = 2;
 const int AUDIO_SETTINGS_ITEMS = 7;
 const int LOGGING_ITEMS = 2;
 const int ALERT_ITEMS = 4;
-const int SYSTEM_ITEMS = 2;  // Brightness + Field Mode
+const int SYSTEM_ITEMS = 3;  // Brightness + Field Mode + Display Timeout
+
+// Forward declaration
+extern PowerManager powerManager;
 
 // =============================================================================
 // MENU NAVIGATION
@@ -844,6 +848,72 @@ void drawAlertMenu(Adafruit_SH1106G& display, int selected, SystemSettings& sett
 }
 
 // =============================================================================
+// POWER SCREEN - ENHANCED WITH POWER MANAGER INFO
+// =============================================================================
+
+void drawPowerScreen(Adafruit_SH1106G& display, SensorData& data, 
+                    SystemSettings& settings, SystemStatus& status) {
+    extern PowerManager powerManager;
+    
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH1106_WHITE);
+    
+    display.setCursor(30, 0);
+    display.println(F("Power Status"));
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    
+    // Battery voltage and percentage
+    display.setCursor(0, 16);
+    display.print(F("Battery: "));
+    display.print(data.batteryVoltage, 2);
+    display.print(F("V ("));
+    display.print(getBatteryLevel(data.batteryVoltage));
+    display.print(F("%)"));
+    
+    // Power source indication
+    display.setCursor(0, 26);
+    if (data.batteryVoltage >= BATTERY_USB_THRESHOLD) {
+        display.print(F("Source: USB Power"));
+    } else {
+        display.print(F("Source: Battery"));
+    }
+    
+    // Power mode
+    display.setCursor(0, 36);
+    display.print(F("Mode: "));
+    display.print(powerManager.getPowerModeString());
+    
+    // Field mode status
+    display.setCursor(0, 46);
+    display.print(F("Field: "));
+    display.print(powerManager.isFieldModeActive() ? "ON" : "OFF");
+    
+    // Display timeout remaining (if in field mode)
+    if (powerManager.isFieldModeActive() && powerManager.isDisplayOn()) {
+        display.setCursor(0, 56);
+        unsigned long remaining = powerManager.getDisplayTimeRemaining();
+        display.print(F("Timeout: "));
+        display.print(remaining / 60000);
+        display.print(F("m"));
+    } else if (powerManager.isFieldModeActive()) {
+        display.setCursor(0, 56);
+        display.print(F("Display: OFF"));
+    }
+    
+    display.display();
+}
+
+// =============================================================================
+// SYSTEM SETTINGS MENU
+// =============================================================================
+
+// =============================================================================
+// RESET MENU OPTION - Add to System Settings Menu
+// =============================================================================
+
+
+// =============================================================================
 // SYSTEM SETTINGS MENU
 // =============================================================================
 
@@ -851,40 +921,117 @@ void handleSystemMenu(Adafruit_SH1106G& display, MenuState& state,
                      SystemSettings& settings, bool& editingInitialized,
                      bool* buttonPressed) {
     static bool editing = false;
+    static int systemMenuItem = 0;
+    const int SYSTEM_ITEMS = 4; // Brightness + Field Mode + Display Timeout + Factory Reset
+    
+    extern PowerManager powerManager;
     
     if (!editing) {
+        if (wasButtonPressed(0)) { // UP
+            systemMenuItem--;
+            if (systemMenuItem < 0) systemMenuItem = SYSTEM_ITEMS - 1;
+        }
+        if (wasButtonPressed(1)) { // DOWN
+            systemMenuItem++;
+            if (systemMenuItem >= SYSTEM_ITEMS) systemMenuItem = 0;
+        }
         if (wasButtonPressed(2)) { // SELECT
-            editing = true;
-            state.editIntValue = settings.displayBrightness;
+            if (systemMenuItem == 3) { // Factory Reset
+                // Show confirmation dialog
+                display.clearDisplay();
+                display.setTextSize(1);
+                display.setTextColor(SH1106_WHITE);
+                display.setCursor(15, 0);
+                display.println(F("FACTORY RESET"));
+                display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+                display.setCursor(0, 20);
+                display.println(F("This will erase ALL"));
+                display.setCursor(0, 30);
+                display.println(F("settings!"));
+                display.setCursor(0, 45);
+                display.println(F("UP:Cancel DOWN:Reset"));
+                display.display();
+                
+                // Wait for confirmation
+                unsigned long startTime = millis();
+                while (millis() - startTime < 5000) {
+                    updateButtonStates();
+                    if (wasButtonPressed(0)) return; // Cancel
+                    if (wasButtonPressed(1)) {
+                        // Perform reset
+                        extern SystemStatus systemStatus;
+                        performFactoryReset(settings, systemStatus);
+                        return;
+                    }
+                    delay(50);
+                }
+                return;
+            } else {
+                editing = true;
+                switch (systemMenuItem) {
+                    case 0: state.editIntValue = settings.displayBrightness; break;
+                    case 1: state.editIntValue = settings.fieldModeEnabled ? 1 : 0; break;
+                    case 2: state.editIntValue = settings.displayTimeoutMin; break;
+                }
+            }
         }
         if (wasButtonPressed(3)) { // BACK
             state.menuLevel = 0;
             state.selectedItem = 5;
         }
         
-        drawSystemMenu(display, 0, settings);
+        drawSystemMenu(display, systemMenuItem, settings);
     } else {
-        // Editing mode with long press support
-        if (wasButtonPressed(0) || shouldRepeat(0)) { // UP
-            state.editIntValue++;
-            if (state.editIntValue > 10) state.editIntValue = 10;
-        }
-        if (wasButtonPressed(1) || shouldRepeat(1)) { // DOWN
-            state.editIntValue--;
-            if (state.editIntValue < 1) state.editIntValue = 1;
-        }
-        if (wasButtonPressed(2)) { // SELECT - Save
-            settings.displayBrightness = state.editIntValue;
-            editing = false;
-            saveSettings(settings);
-            // Apply brightness setting
-            // display.setBrightness(map(settings.displayBrightness, 1, 10, 0, 255));
-        }
-        if (wasButtonPressed(3)) { // BACK
-            editing = false;
+        // Handle editing for brightness, field mode, timeout
+        if (systemMenuItem == 0) { // Display Brightness
+            if (wasButtonPressed(0) || shouldRepeat(0)) {
+                state.editIntValue++;
+                if (state.editIntValue > 10) state.editIntValue = 10;
+            }
+            if (wasButtonPressed(1) || shouldRepeat(1)) {
+                state.editIntValue--;
+                if (state.editIntValue < 1) state.editIntValue = 1;
+            }
+            if (wasButtonPressed(2)) { // Save
+                settings.displayBrightness = state.editIntValue;
+                editing = false;
+                saveSettings(settings);
+            }
+            drawEditIntValue(display, "Brightness", state.editIntValue, "/10");
+            
+        } else if (systemMenuItem == 1) { // Field Mode
+            if (wasButtonPressed(0) || wasButtonPressed(1)) {
+                state.editIntValue = 1 - state.editIntValue; // Toggle
+            }
+            if (wasButtonPressed(2)) { // Save
+                settings.fieldModeEnabled = (state.editIntValue == 1);
+                powerManager.setFieldMode(settings.fieldModeEnabled);
+                editing = false;
+                saveSettings(settings);
+            }
+            drawEditBoolValue(display, "Field Mode", state.editIntValue == 1);
+            
+        } else if (systemMenuItem == 2) { // Display Timeout
+            if (wasButtonPressed(0) || shouldRepeat(0)) {
+                state.editIntValue++;
+                if (state.editIntValue > 30) state.editIntValue = 30;
+            }
+            if (wasButtonPressed(1) || shouldRepeat(1)) {
+                state.editIntValue--;
+                if (state.editIntValue < 1) state.editIntValue = 1;
+            }
+            if (wasButtonPressed(2)) { // Save
+                settings.displayTimeoutMin = state.editIntValue;
+                powerManager.setDisplayTimeout(settings.displayTimeoutMin);
+                editing = false;
+                saveSettings(settings);
+            }
+            drawEditIntValue(display, "Timeout", state.editIntValue, "min");
         }
         
-        drawEditIntValue(display, "Brightness", state.editIntValue, "/10");
+        if (wasButtonPressed(3)) { // BACK - Cancel
+            editing = false;
+        }
     }
 }
 
@@ -897,12 +1044,48 @@ void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& set
     display.println(F("System Settings"));
     display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
-    display.setCursor(0, 20);
-    display.print(F(">"));
-    display.setCursor(12, 20);
+    // Display Brightness
+    if (selected == 0) {
+        display.setCursor(0, 16);
+        display.print(F(">"));
+    }
+    display.setCursor(12, 16);
     display.print(F("Brightness: "));
     display.print(settings.displayBrightness);
     display.print(F("/10"));
+    
+    // Field Mode
+    if (selected == 1) {
+        display.setCursor(0, 26);
+        display.print(F(">"));
+    }
+    display.setCursor(12, 26);
+    display.print(F("Field Mode: "));
+    display.print(settings.fieldModeEnabled ? "ON" : "OFF");
+    
+    // Display Timeout
+    if (selected == 2) {
+        display.setCursor(0, 36);
+        display.print(F(">"));
+    }
+    display.setCursor(12, 36);
+    display.print(F("Timeout: "));
+    display.print(settings.displayTimeoutMin);
+    display.print(F("min"));
+    
+    // Factory Reset
+    if (selected == 3) {
+        display.setCursor(0, 46);
+        display.print(F(">"));
+    }
+    display.setCursor(12, 46);
+    display.print(F("Factory Reset"));
+    
+    // Show current power mode at bottom
+    extern PowerManager powerManager;
+    display.setCursor(0, 56);
+    display.print(F("Mode: "));
+    display.print(powerManager.getPowerModeString());
     
     display.display();
 }

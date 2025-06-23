@@ -18,22 +18,19 @@ using SDFile = SDLib::File;
 void createLogFile(RTC_DS3231& rtc, SystemStatus& status) {
     if (!status.sdWorking || !status.rtcWorking) return;
     
-    // Create directory structure
+    // Create directory structure for monthly files
     DateTime now = rtc.now();
     char dirPath[20];
-    sprintf(dirPath, "/HIVE_DATA/%04d/%02d", now.year(), now.month());
+    sprintf(dirPath, "/HIVE_DATA/%04d", now.year());
     
     // Create directories if they don't exist
     SD.mkdir("/HIVE_DATA");
-    
-    char yearDir[15];
-    sprintf(yearDir, "/HIVE_DATA/%04d", now.year());
-    SD.mkdir(yearDir);
     SD.mkdir(dirPath);
     
     Serial.print(F("Log directory created: "));
     Serial.println(dirPath);
 }
+
 
 // =============================================================================
 // DATA LOGGING
@@ -41,51 +38,105 @@ void createLogFile(RTC_DS3231& rtc, SystemStatus& status) {
 
 void logData(SensorData& data, RTC_DS3231& rtc, SystemSettings& settings, 
              SystemStatus& status) {
-    if (!status.sdWorking || !status.rtcWorking) return;
+    if (!status.rtcWorking) return;
     
-    DateTime now = rtc.now();
-    char filename[30];
-    sprintf(filename, "/HIVE_DATA/%04d/%02d/%04d%02d%02d.CSV", 
-            now.year(), now.month(), now.year(), now.month(), now.day());
-    
-    // Check if file exists
-    bool fileExists = SD.exists(filename);
-    
-    // Open file for writing
-    SDFile dataFile = SD.open(filename, FILE_WRITE);
-    
-    if (dataFile) {
-        // Write header if new file
-        if (!fileExists) {
-            writeLogHeader(dataFile, now, settings);
+    // Try normal SD logging first
+    if (status.sdWorking) {
+        DateTime now = rtc.now();
+        char filename[30];
+        sprintf(filename, "/HIVE_DATA/%04d/%04d-%02d.CSV", 
+                now.year(), now.year(), now.month());
+        
+        bool fileExists = SD.exists(filename);
+        SDFile dataFile = SD.open(filename, FILE_WRITE);
+        
+        if (dataFile) {
+            if (!fileExists) {
+                writeLogHeader(dataFile, now, settings);
+            }
+            writeLogEntry(dataFile, now, data);
+            dataFile.close();
+            
+            // If successful and we have buffered data, flush it
+            if (hasBufferedData()) {
+                flushBufferedData(rtc, settings, status);
+            }
+            
+            Serial.println(F("Data logged to SD"));
+        } else {
+            // SD write failed - store in buffer
+            status.sdWorking = false;
+            storeInBuffer(data);
         }
-        
-        // Write data row
-        writeLogEntry(dataFile, now, data);
-        
-        dataFile.close();
-        
-        // Check if we need to clean old data
-        checkAndCleanOldData(now);
-        
-        Serial.print(F("Data logged to: "));
-        Serial.println(filename);
     } else {
-        Serial.print(F("Failed to open log file: "));
-        Serial.println(filename);
-        status.sdWorking = false;
+        // SD not working - store in emergency buffer
+        storeInBuffer(data);
     }
 }
+// =============================================================================
+// EMERGENCY DATA BUFFERING
+// =============================================================================
 
+static DataBuffer emergencyBuffer = {{}, 0, 0, false};
+
+void storeInBuffer(const SensorData& data) {
+    emergencyBuffer.readings[emergencyBuffer.writeIndex] = data;
+    emergencyBuffer.writeIndex = (emergencyBuffer.writeIndex + 1) % 20;
+    
+    if (emergencyBuffer.count < 20) {
+        emergencyBuffer.count++;
+    } else {
+        emergencyBuffer.full = true; // Overwriting old data
+    }
+    
+    Serial.print(F("Data buffered ("));
+    Serial.print(emergencyBuffer.count);
+    Serial.println(F("/20)"));
+}
+
+void flushBufferedData(RTC_DS3231& rtc, SystemSettings& settings, SystemStatus& status) {
+    Serial.print(F("Flushing "));
+    Serial.print(emergencyBuffer.count);
+    Serial.println(F(" buffered readings..."));
+    
+    uint8_t startIndex = emergencyBuffer.full ? emergencyBuffer.writeIndex : 0;
+    uint8_t itemsToFlush = emergencyBuffer.count;
+    
+    for (uint8_t i = 0; i < itemsToFlush; i++) {
+        uint8_t index = (startIndex + i) % 20;
+        
+        // Log each buffered reading
+        logData(emergencyBuffer.readings[index], rtc, settings, status);
+        
+        // Small delay to avoid overwhelming SD card
+        delay(10);
+    }
+    
+    // Clear buffer after successful flush
+    emergencyBuffer.count = 0;
+    emergencyBuffer.writeIndex = 0;
+    emergencyBuffer.full = false;
+    
+    Serial.println(F("Buffer flush complete"));
+}
+
+bool hasBufferedData() {
+    return emergencyBuffer.count > 0;
+}
 // =============================================================================
 // LOG FILE WRITING
 // =============================================================================
 
 void writeLogHeader(SDFile& file, DateTime& now, SystemSettings& settings) {
-    file.println(F("# HIVE MONITOR DATA LOG"));
+    file.println(F("# HIVE MONITOR DATA LOG - MONTHLY FILE"));
     file.println(F("# Device ID: HIVE_KENYA_001"));
     file.println(F("# Firmware: v2.0"));
-    file.print(F("# Start Date: "));
+    file.print(F("# Month: "));
+    file.print(now.year());
+    file.print(F("-"));
+    if (now.month() < 10) file.print(F("0"));
+    file.println(now.month());
+    file.print(F("# File Created: "));
     file.println(now.timestamp(DateTime::TIMESTAMP_DATE));
     
     // Write settings summary
@@ -181,13 +232,13 @@ void checkAndCleanOldData(DateTime now) {
         
         Serial.print(F("Found "));
         Serial.print(fileCount);
-        Serial.print(F(" old files from "));
+        Serial.print(F(" old monthly files from "));
         Serial.println(oldYear);
         
-        // Note: Full directory deletion would require recursive file deletion
-        // For now, we just notify that old data exists
+        // For monthly files, this will be 12 files or fewer
     }
 }
+
 
 int countFilesInDirectory(const char* dirPath) {
     SDFile dir = SD.open(dirPath);
@@ -220,7 +271,7 @@ void exportDataSummary(RTC_DS3231& rtc, SystemStatus& status) {
     SDFile summaryFile = SD.open("/data_summary.txt", FILE_WRITE);
     
     if (summaryFile) {
-        summaryFile.println(F("# HIVE MONITOR DATA SUMMARY"));
+        summaryFile.println(F("# HIVE MONITOR DATA SUMMARY - MONTHLY FILES"));
         summaryFile.print(F("# Generated: "));
         summaryFile.println(now.timestamp(DateTime::TIMESTAMP_FULL));
         summaryFile.println();
@@ -235,28 +286,31 @@ void exportDataSummary(RTC_DS3231& rtc, SystemStatus& status) {
                 summaryFile.print(year);
                 summaryFile.println(F(":"));
                 
-                // Scan through months
-                for (int month = 1; month <= 12; month++) {
-                    char monthPath[25];
-                    sprintf(monthPath, "%s/%02d", yearPath, month);
-                    
-                    if (SD.exists(monthPath)) {
-                        int fileCount = countFilesInDirectory(monthPath);
-                        summaryFile.print(F("  Month "));
-                        summaryFile.print(month);
-                        summaryFile.print(F(": "));
-                        summaryFile.print(fileCount);
-                        summaryFile.println(F(" files"));
+                // List monthly files
+                SDFile dir = SD.open(yearPath);
+                if (dir) {
+                    while (true) {
+                        SDFile entry = dir.openNextFile();
+                        if (!entry) break;
+                        
+                        if (!entry.isDirectory()) {
+                            summaryFile.print(F("  File: "));
+                            summaryFile.print(entry.name());
+                            summaryFile.print(F(" ("));
+                            summaryFile.print(entry.size());
+                            summaryFile.println(F(" bytes)"));
+                        }
+                        entry.close();
                     }
+                    dir.close();
                 }
             }
         }
         
         summaryFile.close();
-        Serial.println(F("Data summary exported"));
+        Serial.println(F("Monthly data summary exported"));
     }
 }
-
 // =============================================================================
 // ERROR RECOVERY
 // =============================================================================

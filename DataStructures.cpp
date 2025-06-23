@@ -47,6 +47,8 @@ void initializeSystemSettings(SystemSettings& settings) {
     settings.humidityMin = DEFAULT_HUMIDITY_MIN;
     settings.humidityMax = DEFAULT_HUMIDITY_MAX;
     settings.displayBrightness = DEFAULT_DISPLAY_BRIGHTNESS;
+    settings.fieldModeEnabled = DEFAULT_FIELD_MODE_ENABLED;
+    settings.displayTimeoutMin = DEFAULT_DISPLAY_TIMEOUT_MIN;
     settings.magicNumber = SETTINGS_MAGIC_NUMBER;
     settings.checksum = 0;
 }
@@ -341,4 +343,16 @@ void printSystemStatus(const SystemStatus& status) {
     Serial.print(F("SD Working: ")); Serial.println(status.sdWorking ? "YES" : "NO");
     Serial.print(F("Microphone Working: ")); Serial.println(status.pdmWorking ? "YES" : "NO");
     Serial.println(F("====================="));
+}
+
+
+
+    emergencyBuffer.readings[emergencyBuffer.writeIndex] = data;
+    emergencyBuffer.writeIndex = (emergencyBuffer.writeIndex + 1) % 20;
+    
+    if (emergencyBuffer.count < 20) {
+        emergencyBuffer.count++;
+    } else {
+        emergencyBuffer.full = true; // Overwriting old data
+    }
 }

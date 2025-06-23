@@ -49,7 +49,8 @@ bool isValidPressure(float pressure);
 // System utilities
 void performSystemReset();
 void enterDeepSleep(uint32_t seconds);
-
+void performFactoryReset(SystemSettings& settings, SystemStatus& status, 
+                        Adafruit_SH1106G& display);
 // Debug utilities
 void printSystemInfo();
 void hexDump(uint8_t* data, size_t length);

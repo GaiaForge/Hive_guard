@@ -5,6 +5,8 @@
 
 #include "Utils.h"
 #include "math.h"
+#include "Settings.h"    // for saveSettings()
+#include "DataLogger.h"  // for SDLib::File
 
 // =============================================================================
 // BUTTON HANDLING
@@ -372,4 +374,60 @@ void handleError(const char* errorMsg, bool fatal) {
             delay(500);
         }
     }
+}
+
+void performFactoryReset(SystemSettings& settings, SystemStatus& status, 
+                        Adafruit_SH1106G& display) {
+    Serial.println(F("=== FACTORY RESET INITIATED ==="));
+    
+    // Show progress on display
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH1106_WHITE);
+    display.setCursor(20, 20);
+    display.println(F("Resetting..."));
+    display.setCursor(10, 30);
+    display.println(F("Please wait"));
+    display.display();
+    
+    // Load default settings
+    initializeSystemSettings(settings);
+    
+    // Save default settings to flash
+    saveSettings(settings);
+    
+    // Clear alert history if SD is working
+    if (status.sdWorking) {
+        if (SD.exists("/alerts.log")) {
+            SD.remove("/alerts.log");
+            Serial.println(F("Alert history cleared"));
+        }
+        
+        // Create reset marker file
+        SDLib::File resetMarker = SD.open("/factory_reset_performed.txt", FILE_WRITE);
+        if (resetMarker) {
+            resetMarker.print(F("Factory reset performed at: "));
+            resetMarker.println(millis());
+            resetMarker.close();
+            Serial.println(F("Reset marker created"));
+        }
+    }
+    
+    Serial.println(F("Factory reset complete - all settings restored to defaults"));
+    Serial.println(F("System will restart in 3 seconds..."));
+    
+    // Show completion message
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH1106_WHITE);
+    display.setCursor(15, 20);
+    display.println(F("Reset complete"));
+    display.setCursor(10, 30);
+    display.println(F("Restarting..."));
+    display.display();
+    
+    delay(3000);
+    
+    // Reset the system
+    performSystemReset();
 }

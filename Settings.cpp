@@ -239,3 +239,64 @@ void exportSettingsToSD(SystemSettings& settings) {
         Serial.println(F("Settings exported to SD card"));
     }
 }
+
+
+void clearUserData() {
+    // Optional: Clear log files (be very careful with this!)
+    // For safety, we'll just create a reset marker file instead
+    
+    SDLib::File resetMarker = SD.open("/factory_reset_performed.txt", FILE_WRITE);
+    if (resetMarker) {
+        resetMarker.print(F("Factory reset performed at: "));
+        resetMarker.println(millis());
+        resetMarker.close();
+        Serial.println(F("Reset marker created"));
+    }
+    
+    // Optionally clear alert history
+    if (SD.exists("/alerts.log")) {
+        SD.remove("/alerts.log");
+        Serial.println(F("Alert history cleared"));
+    }
+}
+
+bool confirmFactoryReset(Adafruit_SH1106G& display) {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH1106_WHITE);
+    
+    // Warning screen
+    display.setCursor(15, 0);
+    display.println(F("FACTORY RESET"));
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    
+    display.setCursor(0, 16);
+    display.println(F("This will erase ALL"));
+    display.setCursor(0, 26);
+    display.println(F("custom settings and"));
+    display.setCursor(0, 36);
+    display.println(F("restore defaults."));
+    
+    display.setCursor(0, 50);
+    display.println(F("UP:Cancel DOWN:Reset"));
+    
+    display.display();
+    
+    // Wait for user choice
+    unsigned long startTime = millis();
+    while (millis() - startTime < 10000) { // 10 second timeout
+        updateButtonStates();
+        
+        if (wasButtonPressed(0)) { // UP - Cancel
+            return false;
+        }
+        
+        if (wasButtonPressed(1)) { // DOWN - Confirm
+            return true;
+        }
+        
+        delay(50);
+    }
+    
+    return false; // Timeout = cancel
+}

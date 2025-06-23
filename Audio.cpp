@@ -10,7 +10,7 @@
 int audioBuffer[AUDIO_SAMPLE_BUFFER_SIZE];
 volatile int audioSampleIndex = 0;
 
-// Missing variables that were referenced but not declared
+
 short* sampleBuffer = nullptr;
 volatile int samplesRead = 0;
 
@@ -42,16 +42,17 @@ void processAudio(SensorData& data, SystemSettings& settings) {
         audioBuffer[audioSampleIndex] = audioSample;
         audioSampleIndex++;
         
+        // ADD THIS BUFFER OVERFLOW PROTECTION:
         if (audioSampleIndex >= AUDIO_SAMPLE_BUFFER_SIZE) {
             // Buffer full - analyze it
-            AudioAnalysis analysis = analyzeAudioBuffer();  // Fixed: no parameters
+            AudioAnalysis analysis = analyzeAudioBuffer();
             
             // Update sensor data
             data.dominantFreq = analysis.dominantFreq;
             data.soundLevel = analysis.soundLevel;
             data.beeState = classifyBeeState(analysis, settings);
             
-            // Reset buffer
+            // Reset buffer safely
             audioSampleIndex = 0;
         }
         

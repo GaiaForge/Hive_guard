@@ -33,6 +33,7 @@ void drawAudioMenu(Adafruit_SH1106G& display, int selected, SystemSettings& sett
 void drawLoggingMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings);
 void drawAlertMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings);
 void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings);
+void drawSystemMenuWithFieldMode(Adafruit_SH1106G& display, int selected, SystemSettings& settings);
 
 // Sub-menu handlers
 void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state, 
