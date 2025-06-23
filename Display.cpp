@@ -64,7 +64,7 @@ void updateDiagnosticLine(Adafruit_SH1106G& display, const char* message) {
     
     display.display();
     currentDiagLine++;
-}
+    }
 
 
 
@@ -381,6 +381,43 @@ void drawAlertsScreen(Adafruit_SH1106G& display, SensorData& data) {
     display.display();
 }
 
+void drawPowerScreen(Adafruit_SH1106G& display, SensorData& data, 
+                    SystemSettings& settings, SystemStatus& status) {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH1106_WHITE);
+    
+    display.setCursor(30, 0);
+    display.println(F("Power Status"));
+    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    
+    // Battery voltage and percentage
+    display.setCursor(0, 16);
+    display.print(F("Battery: "));
+    display.print(data.batteryVoltage, 2);
+    display.print(F("V"));
+    
+    display.setCursor(0, 28);
+    display.print(F("Level: "));
+    display.print(getBatteryLevel(data.batteryVoltage));
+    display.print(F("%"));
+    
+    // Power source indication
+    display.setCursor(0, 40);
+    if (data.batteryVoltage >= BATTERY_USB_THRESHOLD) {
+        display.print(F("Source: USB Power"));
+    } else {
+        display.print(F("Source: Battery"));
+    }
+    
+    // System uptime
+    display.setCursor(0, 52);
+    display.print(F("Uptime: "));
+    display.print(millis() / 3600000);
+    display.print(F("h"));
+    
+    display.display();
+}
 // =============================================================================
 // UI COMPONENTS
 // =============================================================================
