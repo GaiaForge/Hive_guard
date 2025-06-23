@@ -43,6 +43,7 @@ enum DisplayMode {
     MODE_DASHBOARD,
     MODE_SOUND,
     MODE_ALERTS,
+    MODE_POWER,
     MODE_SETTINGS
 };
 
