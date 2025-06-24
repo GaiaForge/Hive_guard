@@ -24,4 +24,9 @@ void saveSettings(SystemSettings& settings);
 void validateSettings(SystemSettings& settings);
 void exportSettingsToSD(SystemSettings& settings);
 
+void clearUserData();
+bool confirmFactoryReset(Adafruit_SH1106G& display);
+void performFactoryReset(SystemSettings& settings, SystemStatus& status, 
+                        Adafruit_SH1106G& display);
+
 #endif // SETTINGS_H

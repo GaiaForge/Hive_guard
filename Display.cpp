@@ -72,9 +72,11 @@ void updateDiagnosticLine(Adafruit_SH1106G& display, const char* message) {
 // MAIN DISPLAY UPDATE
 // =============================================================================
 
+
 void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode, 
                   SensorData& data, SystemSettings& settings,
-                  SystemStatus& status, RTC_DS3231& rtc) {
+                  SystemStatus& status, RTC_DS3231& rtc,
+                  SpectralFeatures& features, ActivityTrend& trend) {
     if (!status.displayWorking) return;
     
     switch (mode) {
@@ -83,7 +85,7 @@ void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode,
             break;
             
         case MODE_SOUND:
-            drawSoundScreen(display, data, settings);
+            drawSoundScreen(display, data, settings, features, trend);
             break;
             
         case MODE_ALERTS:
@@ -99,7 +101,6 @@ void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode,
             break;
     }
 }
-
 // =============================================================================
 // DASHBOARD SCREEN
 // =============================================================================
@@ -282,7 +283,8 @@ void drawDetailedData(Adafruit_SH1106G& display, SensorData& data,
 // =============================================================================
 
 void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data, 
-                    SystemSettings& settings) {
+                    SystemSettings& settings, SpectralFeatures& features,
+                    ActivityTrend& trend) {
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SH1106_WHITE);
@@ -292,37 +294,43 @@ void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data,
     display.println(F("Sound Monitor"));
     display.drawLine(0, 10, 127, 10, SH1106_WHITE);
     
-    // Frequency
+    // Centroid frequency (more meaningful than zero-crossing)
     display.setCursor(0, 16);
-    display.print(F("Frequency: "));
-    display.print(data.dominantFreq);
+    display.print(F("Centroid: "));
+    display.print((int)features.spectralCentroid);
     display.print(F(" Hz"));
     
-    // Sound level with visual bar
+    // Sound level with visual bar (keep existing function)
     display.setCursor(0, 28);
     display.print(F("Level:"));
     drawSoundLevelBar(display, 45, 26, 80, 10, data.soundLevel);
     
-    // Bee state
+    // Baseline comparison (very useful for beekeepers)
     display.setCursor(0, 40);
-    display.print(F("State: "));
-    display.print(getBeeStateString(data.beeState));
+    display.print(F("Baseline: "));
+    display.print((int)trend.baselineActivity);
+    display.print(F("% ("));
     
-    // Threshold indicators
+    int change = (int)((trend.activityIncrease - 1.0) * 100);
+    if(change >= 0) display.print(F("+"));
+    display.print(change);
+    display.print(F("%)"));
+    
+    // Pattern status (key insight for beekeepers)
     display.setCursor(0, 52);
-    display.setTextSize(1);
-    display.print(F("Q:"));
-    display.print(settings.queenFreqMin);
-    display.print(F("-"));
-    display.print(settings.queenFreqMax);
-    display.print(F(" S:"));
-    display.print(settings.swarmFreqMin);
-    display.print(F("-"));
-    display.print(settings.swarmFreqMax);
+    display.print(F("Pattern: "));
+    if(trend.abnormalTiming) {
+        display.print(F("ABNORMAL"));
+    } else if(trend.activityIncrease > 1.5) {
+        display.print(F("HIGH"));
+    } else if(trend.activityIncrease < 0.7) {
+        display.print(F("LOW"));
+    } else {
+        display.print(F("NORMAL"));
+    }
     
     display.display();
 }
-
 // =============================================================================
 // ALERTS SCREEN
 // =============================================================================

@@ -12,9 +12,13 @@
 
 // Function declarations
 void showStartupScreen(Adafruit_SH1106G& display);
+
+
 void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode, 
                   SensorData& data, SystemSettings& settings,
-                  SystemStatus& status, RTC_DS3231& rtc);
+                  SystemStatus& status, RTC_DS3231& rtc,
+                  SpectralFeatures& features, ActivityTrend& trend);
+
 void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected, 
                              DateTime dt, bool editMode, int editValue);
 
@@ -26,10 +30,12 @@ void checkSDCardAtStartup(Adafruit_SH1106G& display, SystemStatus& status);
 void drawDashboard(Adafruit_SH1106G& display, SensorData& data, 
                   SystemStatus& status, RTC_DS3231& rtc);
 void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data, 
-                    SystemSettings& settings);
+                    SystemSettings& settings, SpectralFeatures& features,
+                    ActivityTrend& trend);
 void drawAlertsScreen(Adafruit_SH1106G& display, SensorData& data);
 void drawPowerScreen(Adafruit_SH1106G& display, SensorData& data, 
                     SystemSettings& settings, SystemStatus& status);
+
                     
 // UI component functions
 void drawHeader(Adafruit_SH1106G& display, SensorData& data, SystemStatus& status);

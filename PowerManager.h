@@ -87,8 +87,7 @@ private:
     static const float POWER_AUDIO_MA;
     static const float POWER_SLEEP_MA;
     
-    // Internal methods
-    void updatePowerMode(float batteryVoltage);
+    // Internal methods    
     void calculateRuntimeEstimate(float batteryVoltage);
     void handleDisplayTimeout();
     bool shouldEnterSleep();
@@ -111,6 +110,7 @@ public:
     void enableFieldMode();
     void disableFieldMode();
     bool isFieldModeActive() const;
+    void updatePowerMode(float batteryVoltage);
     
     // Display management
     void turnOnDisplay();

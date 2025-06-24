@@ -43,8 +43,13 @@ MenuState menuState = {
     false, 0, 0, 0, 0.0, 0
 };
 
+
 // Power Manager 
 PowerManager powerManager;
+
+// Audio processing
+SpectralFeatures currentSpectralFeatures;
+ActivityTrend currentActivityTrend;
 
 // Timing
 unsigned long lastSensorRead = 0;
@@ -113,6 +118,8 @@ void setup() {
         updateDiagnosticLine(display, "Audio: FAILED");
     }
     delay(500);
+    currentSpectralFeatures = {0};
+    currentActivityTrend = {0};
     
     // Initialize buttons
     pinMode(BTN_UP, INPUT_PULLUP);
@@ -154,7 +161,8 @@ void setup() {
     
     // Take initial sensor reading and show dashboard
     readAllSensors(bme, currentData, settings, systemStatus);
-    updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
+    updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc, 
+              currentSpectralFeatures, currentActivityTrend);
 }
 
 
@@ -197,7 +205,8 @@ void loop() {
             } else {
                 currentMode = MODE_POWER;
             }
-            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
+            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc, 
+              currentSpectralFeatures, currentActivityTrend);
         }
         
         if (wasButtonPressed(1)) { // DOWN
@@ -206,7 +215,8 @@ void loop() {
             } else {
                 currentMode = MODE_DASHBOARD;
             }
-            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
+            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc, 
+              currentSpectralFeatures, currentActivityTrend);
         }
         
         if (wasButtonPressed(2)) { // SELECT
@@ -220,7 +230,8 @@ void loop() {
         
         if (wasButtonPressed(3)) { // BACK
             currentMode = MODE_DASHBOARD;
-            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
+            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc, 
+              currentSpectralFeatures, currentActivityTrend);
         }
     }
 
@@ -238,13 +249,28 @@ void loop() {
     }
     
     // Audio sampling (only if not in power save mode)
+    
+    
     if (systemStatus.pdmWorking && 
         powerManager.getCurrentPowerMode() != POWER_CRITICAL &&
         (currentTime - lastAudioSample >= AUDIO_INTERVAL)) {
+        
         processAudio(currentData, settings);
+        
+        // Add new spectral analysis (with safety check)
+        if (audioSampleIndex > 0) {
+            currentSpectralFeatures = analyzeAudioFFT();
+            
+            // Update activity trend (need current hour)
+            if (systemStatus.rtcWorking) {
+                DateTime now = rtc.now();
+                updateActivityTrend(currentActivityTrend, currentSpectralFeatures, now.hour());
+            }
+        }
+        
         lastAudioSample = currentTime;
     }
-    
+        
     // Data logging (only if SD card is working)
     if (settings.logEnabled && systemStatus.sdWorking) {
         unsigned long logIntervalMs = settings.logInterval * 60000UL;
@@ -257,7 +283,8 @@ void loop() {
     // Update display (only if display is on and working)
     if (systemStatus.displayWorking && powerManager.isDisplayOn() && 
         (currentTime - lastDisplayUpdate >= DISPLAY_INTERVAL)) {
-        updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc);
+        updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
+                    currentSpectralFeatures, currentActivityTrend);
         lastDisplayUpdate = currentTime;
     }
     

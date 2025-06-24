@@ -17,15 +17,26 @@ struct AudioAnalysis {
     float spectralCentroid;
 };
 
+struct SpectralFeatures {
+    float spectralCentroid;      // "Brightness" of sound
+    float totalEnergy;           // Overall sound energy
+    float bandEnergyRatios[6];   // Energy in different frequency bands
+    float harmonicity;           // How harmonic the sound is
+};
+
+struct ActivityTrend {
+    float currentActivity;
+    float baselineActivity;      // 24-hour rolling average  
+    float activityIncrease;      // Current vs baseline ratio
+    bool abnormalTiming;         // Active at wrong times
+};
+
 // Global audio variables
 extern int audioBuffer[AUDIO_SAMPLE_BUFFER_SIZE];
 extern volatile int audioSampleIndex;
 
 
-extern short* sampleBuffer;
-extern volatile int samplesRead;
-
-// Function declarations - CORRECTED SIGNATURES
+// Function declarations
 void initializeAudio(SystemStatus& status);
 void processAudio(SensorData& data, SystemSettings& settings);
 
@@ -47,5 +58,7 @@ void updateDailyPattern(DailyPattern& pattern, uint8_t hour,
 uint8_t detectEnvironmentalStress(SensorData& data, AudioAnalysis& audio,
                                  DailyPattern& pattern, RTC_DS3231& rtc);
 
+                                 SpectralFeatures analyzeAudioFFT();
+void updateActivityTrend(ActivityTrend& trend, SpectralFeatures& current, uint8_t hour);
 
 #endif // AUDIO_H

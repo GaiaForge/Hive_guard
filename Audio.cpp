@@ -11,9 +11,6 @@ int audioBuffer[AUDIO_SAMPLE_BUFFER_SIZE];
 volatile int audioSampleIndex = 0;
 
 
-short* sampleBuffer = nullptr;
-volatile int samplesRead = 0;
-
 // =============================================================================
 // AUDIO INITIALIZATION
 // =============================================================================
@@ -222,6 +219,92 @@ float estimateSpectralCentroidOptimized() {
     }
     
     return (totalEnergy > 0) ? totalWeightedFreq / totalEnergy : 0;
+}
+
+// Add to Audio.cpp after existing functions
+
+SpectralFeatures analyzeAudioFFT() {
+    SpectralFeatures result = {0};
+    
+    if (audioSampleIndex < 64) {
+        return result;  // Not enough data
+    }
+    
+    // Simple spectral centroid calculation using existing zero-crossing method
+    // We'll enhance this with real FFT later
+    float weightedFreqSum = 0;
+    float totalEnergy = 0;
+    
+    // Analyze in small windows to estimate spectral content
+    for (int w = 0; w < audioSampleIndex - 32; w += 16) {
+        int zeroCrossings = 0;
+        float windowEnergy = 0;
+        
+        for (int i = w + 1; i < w + 32 && i < audioSampleIndex; i++) {
+            int current = audioBuffer[i];
+            int previous = audioBuffer[i-1];
+            
+            // Zero crossing detection
+            if ((current >= 2048 && previous < 2048) || 
+                (current < 2048 && previous >= 2048)) {
+                zeroCrossings++;
+            }
+            
+            // Energy calculation
+            windowEnergy += abs(current - 2048);
+        }
+        
+        // Estimate frequency for this window
+        float windowFreq = (zeroCrossings / 2.0) * (AUDIO_SAMPLE_RATE / 32.0);
+        
+        weightedFreqSum += windowFreq * windowEnergy;
+        totalEnergy += windowEnergy;
+    }
+    
+    // Calculate spectral centroid
+    if (totalEnergy > 0) {
+        result.spectralCentroid = weightedFreqSum / totalEnergy;
+        result.totalEnergy = totalEnergy / 1000.0; // Scale down
+    }
+    
+    // Constrain to reasonable range
+    result.spectralCentroid = constrain(result.spectralCentroid, 50, 1000);
+    
+    return result;
+}
+
+void updateActivityTrend(ActivityTrend& trend, SpectralFeatures& current, uint8_t hour) {
+    // Initialize baseline if this is first reading
+    if (trend.baselineActivity == 0) {
+        trend.baselineActivity = current.totalEnergy;
+        trend.currentActivity = current.totalEnergy;
+        trend.activityIncrease = 1.0;
+        trend.abnormalTiming = false;
+        return;
+    }
+    
+    // Update current activity
+    trend.currentActivity = current.totalEnergy;
+    
+    // Update baseline with slow exponential smoothing (99% old, 1% new)
+    trend.baselineActivity = 0.99 * trend.baselineActivity + 0.01 * current.totalEnergy;
+    
+    // Calculate activity increase ratio
+    if (trend.baselineActivity > 0) {
+        trend.activityIncrease = trend.currentActivity / trend.baselineActivity;
+    } else {
+        trend.activityIncrease = 1.0;
+    }
+    
+    // Check for abnormal timing patterns
+    // High activity at night (22:00-06:00) or very low activity during day (10:00-16:00)
+    if ((hour >= 22 || hour <= 6) && trend.activityIncrease > 1.5) {
+        trend.abnormalTiming = true;
+    } else if (hour >= 10 && hour <= 16 && trend.activityIncrease < 0.3) {
+        trend.abnormalTiming = true;
+    } else {
+        trend.abnormalTiming = false;
+    }
 }
 
 // =============================================================================

@@ -347,12 +347,3 @@ void printSystemStatus(const SystemStatus& status) {
 
 
 
-    emergencyBuffer.readings[emergencyBuffer.writeIndex] = data;
-    emergencyBuffer.writeIndex = (emergencyBuffer.writeIndex + 1) % 20;
-    
-    if (emergencyBuffer.count < 20) {
-        emergencyBuffer.count++;
-    } else {
-        emergencyBuffer.full = true; // Overwriting old data
-    }
-}

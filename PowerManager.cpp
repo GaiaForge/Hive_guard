@@ -425,61 +425,60 @@ bool PowerManager::shouldEnterSleep() {
 // =============================================================================
 // POWER MODE MANAGEMENT
 // =============================================================================
-public:
-    void PowerManager::updatePowerMode(float batteryVoltage) {
-        PowerMode newMode = status.currentMode;
-        
-        // Auto power mode based on battery
-        if (batteryVoltage <= BATTERY_CRITICAL) {
-            newMode = POWER_CRITICAL;
-        } else if (batteryVoltage <= BATTERY_LOW) {
-            newMode = POWER_SAVE;
-        } else if (settings.fieldModeEnabled) {
-            newMode = POWER_FIELD;
-        } else {
-            newMode = POWER_NORMAL;
-        }
-        
-        if (newMode != status.currentMode) {
-            Serial.print(F("Power mode: "));
-            Serial.print(getPowerModeString());
-            Serial.print(F(" -> "));
-            status.currentMode = newMode;
-            Serial.println(getPowerModeString());
-            
-            // Auto-enable field mode if battery is low
-            if (settings.autoFieldMode && newMode >= POWER_SAVE && !status.fieldModeActive) {
-                enableFieldMode();
-            }
-            
-            // Adjust system behavior based on power mode
-            switch (newMode) {
-                case POWER_CRITICAL:
-                    // Minimum functionality only
-                    powerDownAudio();
-                    setDisplayTimeout(1); // 1 minute timeout
-                    break;
-                    
-                case POWER_SAVE:
-                    // Reduced functionality
-                    setDisplayTimeout(2); // 2 minute timeout
-                    break;
-                    
-                case POWER_FIELD:
-                    // Optimized for field use
-                    setDisplayTimeout(5); // 5 minute timeout
-                    break;
-                    
-                case POWER_NORMAL:
-                    // Full functionality
-                    powerUpAll();
-                    break;
-            }
-        }
-        
-        // Always update runtime estimate
-        calculateRuntimeEstimate(batteryVoltage);
+void PowerManager::updatePowerMode(float batteryVoltage) {
+    PowerMode newMode = status.currentMode;
+    
+    // Auto power mode based on battery
+    if (batteryVoltage <= BATTERY_CRITICAL) {
+        newMode = POWER_CRITICAL;
+    } else if (batteryVoltage <= BATTERY_LOW) {
+        newMode = POWER_SAVE;
+    } else if (settings.fieldModeEnabled) {
+        newMode = POWER_FIELD;
+    } else {
+        newMode = POWER_NORMAL;
     }
+    
+    if (newMode != status.currentMode) {
+        Serial.print(F("Power mode: "));
+        Serial.print(getPowerModeString());
+        Serial.print(F(" -> "));
+        status.currentMode = newMode;
+        Serial.println(getPowerModeString());
+        
+        // Auto-enable field mode if battery is low
+        if (settings.autoFieldMode && newMode >= POWER_SAVE && !status.fieldModeActive) {
+            enableFieldMode();
+        }
+        
+        // Adjust system behavior based on power mode
+        switch (newMode) {
+            case POWER_CRITICAL:
+                // Minimum functionality only
+                powerDownAudio();
+                setDisplayTimeout(1); // 1 minute timeout
+                break;
+                
+            case POWER_SAVE:
+                // Reduced functionality
+                setDisplayTimeout(2); // 2 minute timeout
+                break;
+                
+            case POWER_FIELD:
+                // Optimized for field use
+                setDisplayTimeout(5); // 5 minute timeout
+                break;
+                
+            case POWER_NORMAL:
+                // Full functionality
+                powerUpAll();
+                break;
+        }
+    }
+    
+    // Always update runtime estimate
+    calculateRuntimeEstimate(batteryVoltage);
+}
 
 
 void PowerManager::calculateRuntimeEstimate(float batteryVoltage) {
