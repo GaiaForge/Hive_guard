@@ -90,8 +90,8 @@ private:
     // Internal methods    
     void calculateRuntimeEstimate(float batteryVoltage);
     void handleDisplayTimeout();
-    bool shouldEnterSleep();
-    void configureWakeupSources();
+    void configureButtonWakeup();
+    
     
 public:
     PowerManager();
@@ -105,6 +105,8 @@ public:
     void update();
     void handleUserActivity();
     void handleWakeUp(WakeUpSource source);
+    bool shouldEnterSleep();
+    void configureWakeupSources();
     
     // Field mode management
     void enableFieldMode();

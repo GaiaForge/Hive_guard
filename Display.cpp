@@ -13,7 +13,7 @@
 void showStartupScreen(Adafruit_SH1106G& display) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Draw bee icon (simple)
     drawBeeIcon(display, 54, 10);
@@ -35,12 +35,12 @@ static int currentDiagLine = 0;
 void showSensorDiagnosticsScreen(Adafruit_SH1106G& display, SystemStatus& status) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Title
     display.setCursor(15, 0);
     display.println(F("System Diagnostics"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Reset line counter
     currentDiagLine = 0;
@@ -54,12 +54,12 @@ void updateDiagnosticLine(Adafruit_SH1106G& display, const char* message) {
     if (y > 54) return; // Don't overflow screen
     
     // Clear the line area
-    display.fillRect(0, y, 128, 8, SH1106_BLACK);
+    display.fillRect(0, y, 128, 8, SH110X_BLACK);
     
     // Draw the message
     display.setCursor(2, y);
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     display.print(message);
     
     display.display();
@@ -109,7 +109,7 @@ void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode,
 void drawDashboard(Adafruit_SH1106G& display, SensorData& data, 
                   SystemStatus& status, RTC_DS3231& rtc) {
     display.clearDisplay();
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     display.setTextSize(1);
     
     // Top line: Date/Time on left, Battery icon on right
@@ -129,7 +129,7 @@ void drawDashboard(Adafruit_SH1106G& display, SensorData& data,
     drawBatteryIcon(display, 112, 0, data.batteryVoltage);
     
     // Separator line
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Environmental data
     int y = 16;
@@ -167,7 +167,7 @@ void drawDashboard(Adafruit_SH1106G& display, SensorData& data,
     }
     
     // Bottom separator
-    display.drawLine(0, 52, 127, 52, SH1106_WHITE);
+    display.drawLine(0, 52, 127, 52, SH110X_WHITE);
     
     // Status at bottom
     display.setCursor(0, 56);
@@ -195,12 +195,12 @@ void drawDetailedData(Adafruit_SH1106G& display, SensorData& data,
                      SystemStatus& status, AbscondingIndicators& risk) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Title
     display.setCursor(30, 0);
     display.println(F("Detailed Data"));
-    display.drawLine(0, 9, 127, 9, SH1106_WHITE);
+    display.drawLine(0, 9, 127, 9, SH110X_WHITE);
     
     // Two column layout for maximum data
     int y = 13;
@@ -287,12 +287,12 @@ void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data,
                     ActivityTrend& trend) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Title
     display.setCursor(30, 0);
     display.println(F("Sound Monitor"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Centroid frequency (more meaningful than zero-crossing)
     display.setCursor(0, 16);
@@ -338,12 +338,12 @@ void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data,
 void drawAlertsScreen(Adafruit_SH1106G& display, SensorData& data) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Title
     display.setCursor(40, 0);
     display.println(F("Alerts"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     int yPos = 16;
     
@@ -393,11 +393,11 @@ void drawPowerScreen(Adafruit_SH1106G& display, SensorData& data,
                     SystemSettings& settings, SystemStatus& status) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(30, 0);
     display.println(F("Power Status"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Battery voltage and percentage
     display.setCursor(0, 16);
@@ -451,7 +451,7 @@ void drawHeader(Adafruit_SH1106G& display, SensorData& data, SystemStatus& statu
     }
     
     // Separator line
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
 }
 
 void drawTimeDate(Adafruit_SH1106G& display, int y, RTC_DS3231& rtc, 
@@ -549,35 +549,35 @@ void drawBeeState(Adafruit_SH1106G& display, int x, int y, uint8_t state) {
 void drawBatteryIcon(Adafruit_SH1106G& display, int16_t x, int16_t y, float voltage) {
     if (voltage >= BATTERY_USB_THRESHOLD) {
         // Lightning bolt for USB power
-        display.drawLine(x + 2, y + 1, x + 5, y + 4, SH1106_WHITE);
-        display.drawLine(x + 4, y + 3, x + 7, y + 3, SH1106_WHITE);
-        display.drawLine(x + 6, y + 4, x + 9, y + 7, SH1106_WHITE);
-        display.drawLine(x + 1, y + 2, x + 4, y + 2, SH1106_WHITE);
-        display.drawLine(x + 7, y + 5, x + 10, y + 5, SH1106_WHITE);
+        display.drawLine(x + 2, y + 1, x + 5, y + 4, SH110X_WHITE);
+        display.drawLine(x + 4, y + 3, x + 7, y + 3, SH110X_WHITE);
+        display.drawLine(x + 6, y + 4, x + 9, y + 7, SH110X_WHITE);
+        display.drawLine(x + 1, y + 2, x + 4, y + 2, SH110X_WHITE);
+        display.drawLine(x + 7, y + 5, x + 10, y + 5, SH110X_WHITE);
         return;
     }
     
     // Battery outline
-    display.drawRect(x, y + 2, 12, 6, SH1106_WHITE);
-    display.drawRect(x + 12, y + 3, 2, 4, SH1106_WHITE);
+    display.drawRect(x, y + 2, 12, 6, SH110X_WHITE);
+    display.drawRect(x + 12, y + 3, 2, 4, SH110X_WHITE);
     
     // Fill based on level
     int level = getBatteryLevel(voltage);
     int fillWidth = map(level, 0, 100, 0, 10);
     if (fillWidth > 0) {
-        display.fillRect(x + 1, y + 3, fillWidth, 4, SH1106_WHITE);
+        display.fillRect(x + 1, y + 3, fillWidth, 4, SH110X_WHITE);
     }
 }
 
 void drawSoundLevelBar(Adafruit_SH1106G& display, int x, int y, 
                       int width, int height, uint8_t level) {
     // Draw outline
-    display.drawRect(x, y, width + 2, height, SH1106_WHITE);
+    display.drawRect(x, y, width + 2, height, SH110X_WHITE);
     
     // Fill based on level
     int fillWidth = map(level, 0, 100, 0, width);
     if (fillWidth > 0) {
-        display.fillRect(x + 1, y + 1, fillWidth, height - 2, SH1106_WHITE);
+        display.fillRect(x + 1, y + 1, fillWidth, height - 2, SH110X_WHITE);
     }
     
     // Show percentage
@@ -602,15 +602,15 @@ void drawAlertLine(Adafruit_SH1106G& display, int y, const char* text,
 void drawBeeIcon(Adafruit_SH1106G& display, int x, int y) {
     // Simple bee icon
     // Body
-    display.fillCircle(x + 10, y + 5, 4, SH1106_WHITE);
+    display.fillCircle(x + 10, y + 5, 4, SH110X_WHITE);
     // Head
-    display.fillCircle(x + 4, y + 5, 3, SH1106_WHITE);
+    display.fillCircle(x + 4, y + 5, 3, SH110X_WHITE);
     // Wings
-    display.drawCircle(x + 10, y, 3, SH1106_WHITE);
-    display.drawCircle(x + 10, y + 10, 3, SH1106_WHITE);
+    display.drawCircle(x + 10, y, 3, SH110X_WHITE);
+    display.drawCircle(x + 10, y + 10, 3, SH110X_WHITE);
     // Stripes
-    display.drawLine(x + 8, y + 2, x + 8, y + 8, SH1106_BLACK);
-    display.drawLine(x + 11, y + 2, x + 11, y + 8, SH1106_BLACK);
+    display.drawLine(x + 8, y + 2, x + 8, y + 8, SH110X_BLACK);
+    display.drawLine(x + 11, y + 2, x + 11, y + 8, SH110X_BLACK);
 }
 
 // daily summary screen
@@ -619,12 +619,12 @@ void drawDailySummary(Adafruit_SH1106G& display, DailyPattern& pattern,
                      AbscondingIndicators& indicators) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Title
     display.setCursor(25, 0);
     display.println(F("Daily Summary"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Absconding risk with visual indicator
     display.setCursor(0, 16);
@@ -633,9 +633,9 @@ void drawDailySummary(Adafruit_SH1106G& display, DailyPattern& pattern,
     display.print(F("%"));
     
     // Risk level bar
-    display.drawRect(0, 26, 102, 8, SH1106_WHITE);
+    display.drawRect(0, 26, 102, 8, SH110X_WHITE);
     int riskBar = map(indicators.riskLevel, 0, 100, 0, 100);
-    display.fillRect(1, 27, riskBar, 6, SH1106_WHITE);
+    display.fillRect(1, 27, riskBar, 6, SH110X_WHITE);
     
     // Key indicators
     display.setCursor(0, 38);

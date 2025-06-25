@@ -122,12 +122,12 @@ void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawMainSettingsMenu(Adafruit_SH1106G& display, int selected) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Title
     display.setCursor(35, 0);
     display.println(F("Settings"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     const char* items[] = {
         "Time & Date",
@@ -170,11 +170,11 @@ void drawMainSettingsMenu(Adafruit_SH1106G& display, int selected) {
 void drawBluetoothMenu(Adafruit_SH1106G& display, int selected, BluetoothSettings& btSettings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("Bluetooth Setup"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     const char* labels[] = {
         "Mode:", "Manual Time:", "Start Hour:", "End Hour:", "Device ID:"
@@ -229,11 +229,11 @@ void drawBluetoothMenu(Adafruit_SH1106G& display, int selected, BluetoothSetting
 void drawEditBluetoothMode(Adafruit_SH1106G& display, BluetoothMode mode) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("Bluetooth Mode"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     display.setTextSize(2);
     display.setCursor(15, 25);
@@ -386,11 +386,11 @@ void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected,
                              DateTime dt, bool editMode, int editValue) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("Time & Date"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     const char* labels[] = {"Year:", "Month:", "Day:", "Hour:", "Minute:"};
     int values[] = {dt.year(), dt.month(), dt.day(), dt.hour(), dt.minute()};
@@ -444,13 +444,13 @@ void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected,
 void drawEditValueScreen(Adafruit_SH1106G& display, int item, int value) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     const char* titles[] = {"Set Year", "Set Month", "Set Day", "Set Hour", "Set Minute"};
     
     display.setCursor(30, 0);
     display.println(titles[item]);
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     display.setTextSize(3);
     
@@ -548,11 +548,11 @@ void drawSensorCalibMenu(Adafruit_SH1106G& display, int selected,
                         SystemSettings& settings, SensorData& currentData) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(20, 0);
     display.println(F("Sensor Calibration"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Temperature offset
     if (selected == 0) {
@@ -588,11 +588,11 @@ void drawEditFloatValue(Adafruit_SH1106G& display, const char* title,
                        float value, const char* unit) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(30, 0);
     display.println(title);
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     display.setTextSize(2);
     display.setCursor(30, 25);
@@ -708,11 +708,11 @@ void handleAudioMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawAudioMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("Audio Settings"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     const char* labels[] = {
         "Sensitivity:", "Queen Min:", 
@@ -814,11 +814,11 @@ void handleLoggingMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawLoggingMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(30, 0);
     display.println(F("Logging Setup"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Log interval
     if (selected == 0) {
@@ -924,11 +924,11 @@ void handleAlertMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawAlertMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(20, 0);
     display.println(F("Alert Thresholds"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     const char* labels[] = {"Temp Min:", "Temp Max:", "Humid Min:", "Humid Max:"};
     float values[] = {settings.tempMin, settings.tempMax, settings.humidityMin, settings.humidityMax};
@@ -951,77 +951,6 @@ void drawAlertMenu(Adafruit_SH1106G& display, int selected, SystemSettings& sett
     
     display.display();
 }
-
-// =============================================================================
-// BLUETOOTH SETTINGS MENU
-// =============================================================================
-
-
-
-// =============================================================================
-// POWER SCREEN - ENHANCED WITH POWER MANAGER INFO
-// =============================================================================
-
-void drawPowerScreen(Adafruit_SH1106G& display, SensorData& data, 
-                    SystemSettings& settings, SystemStatus& status) {
-    extern PowerManager powerManager;
-    
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
-    
-    display.setCursor(30, 0);
-    display.println(F("Power Status"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
-    
-    // Battery voltage and percentage
-    display.setCursor(0, 16);
-    display.print(F("Battery: "));
-    display.print(data.batteryVoltage, 2);
-    display.print(F("V ("));
-    display.print(getBatteryLevel(data.batteryVoltage));
-    display.print(F("%)"));
-    
-    // Power source indication
-    display.setCursor(0, 26);
-    if (data.batteryVoltage >= BATTERY_USB_THRESHOLD) {
-        display.print(F("Source: USB Power"));
-    } else {
-        display.print(F("Source: Battery"));
-    }
-    
-    // Power mode
-    display.setCursor(0, 36);
-    display.print(F("Mode: "));
-    display.print(powerManager.getPowerModeString());
-    
-    // Field mode status
-    display.setCursor(0, 46);
-    display.print(F("Field: "));
-    display.print(powerManager.isFieldModeActive() ? "ON" : "OFF");
-    
-    // Display timeout remaining (if in field mode)
-    if (powerManager.isFieldModeActive() && powerManager.isDisplayOn()) {
-        display.setCursor(0, 56);
-        unsigned long remaining = powerManager.getDisplayTimeRemaining();
-        display.print(F("Timeout: "));
-        display.print(remaining / 60000);
-        display.print(F("m"));
-    } else if (powerManager.isFieldModeActive()) {
-        display.setCursor(0, 56);
-        display.print(F("Display: OFF"));
-    }
-    
-    display.display();
-}
-
-// =============================================================================
-// SYSTEM SETTINGS MENU
-// =============================================================================
-
-// =============================================================================
-// RESET MENU OPTION - Add to System Settings Menu
-// =============================================================================
 
 
 // =============================================================================
@@ -1051,10 +980,10 @@ void handleSystemMenu(Adafruit_SH1106G& display, MenuState& state,
                 // Show confirmation dialog
                 display.clearDisplay();
                 display.setTextSize(1);
-                display.setTextColor(SH1106_WHITE);
+                display.setTextColor(SH110X_WHITE);
                 display.setCursor(15, 0);
                 display.println(F("FACTORY RESET"));
-                display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+                display.drawLine(0, 10, 127, 10, SH110X_WHITE);
                 display.setCursor(0, 20);
                 display.println(F("This will erase ALL"));
                 display.setCursor(0, 30);
@@ -1071,7 +1000,7 @@ void handleSystemMenu(Adafruit_SH1106G& display, MenuState& state,
                     if (wasButtonPressed(1)) {
                         // Perform reset
                         extern SystemStatus systemStatus;
-                        performFactoryReset(settings, systemStatus);
+                        performFactoryReset(settings, systemStatus, display);
                         return;
                     }
                     delay(50);
@@ -1149,11 +1078,11 @@ void handleSystemMenu(Adafruit_SH1106G& display, MenuState& state,
 void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("System Settings"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Display Brightness
     if (selected == 0) {
@@ -1208,11 +1137,11 @@ void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& set
 void drawEditIntValue(Adafruit_SH1106G& display, const char* title, int value, const char* unit) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(30, 0);
     display.println(title);
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     display.setTextSize(2);
     display.setCursor(40, 25);
@@ -1229,11 +1158,11 @@ void drawEditIntValue(Adafruit_SH1106G& display, const char* title, int value, c
 void drawEditBoolValue(Adafruit_SH1106G& display, const char* title, bool value) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(40, 0);
     display.println(title);
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     display.setTextSize(2);
     display.setCursor(45, 25);
@@ -1321,13 +1250,13 @@ void drawTextEditor(Adafruit_SH1106G& display, const char* title,
                    const char* text, int cursorPos, char currentChar) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Title
     display.setCursor(5, 0);
     display.print(F("Edit: "));
     display.print(title);
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     // Current text
     display.setCursor(5, 20);
@@ -1514,87 +1443,4 @@ void handleBluetoothMenu(Adafruit_SH1106G& display, MenuState& state,
             editing = false;
         }
     }
-}
-// =============================================================================
-// UPDATED BLUETOOTH MENU DISPLAY
-// =============================================================================
-
-void drawBluetoothMenu(Adafruit_SH1106G& display, int selected, BluetoothSettings& btSettings) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
-    
-    display.setCursor(25, 0);
-    display.println(F("Bluetooth Setup"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
-    
-    const char* labels[] = {
-        "Mode:", "Manual Time:", "Start Hour:", "End Hour:", 
-        "Device ID:", "Hive Name:", "Location:", "Beekeeper:"
-    };
-    
-    // Show 4 items at a time with scrolling
-    int startItem = 0;
-    if (selected >= 4) {
-        startItem = selected - 3;
-    }
-    
-    for (int i = 0; i < 4 && (startItem + i) < 8; i++) {
-        int itemIdx = startItem + i;
-        int y = 16 + (i * 10);
-        
-        if (itemIdx == selected) {
-            display.setCursor(0, y);
-            display.print(F(">"));
-        }
-        
-        display.setCursor(12, y);
-        display.print(labels[itemIdx]);
-        
-        // Adjust value display based on available width
-        int valueX = (itemIdx >= 5) ? 65 : 75;  // Move text values left for space
-        display.setCursor(valueX, y);
-        
-        switch (itemIdx) {
-            case 0: // Mode
-                display.print(bluetoothModeToString(btSettings.mode));
-                break;
-            case 1: // Manual Timeout
-                display.print(btSettings.manualTimeoutMin);
-                display.print(F("min"));
-                break;
-            case 2: // Start Hour
-                display.print(btSettings.scheduleStartHour);
-                display.print(F(":00"));
-                break;
-            case 3: // End Hour
-                display.print(btSettings.scheduleEndHour);
-                display.print(F(":00"));
-                break;
-            case 4: // Device ID
-                display.print(btSettings.deviceId);
-                break;
-            case 5: // Hive Name
-                display.print(btSettings.hiveName);
-                break;
-            case 6: // Location
-                display.print(btSettings.location);
-                break;
-            case 7: // Beekeeper
-                display.print(btSettings.beekeeper);
-                break;
-        }
-    }
-    
-    // Show current device name at bottom
-    extern BluetoothManager bluetoothManager;
-    display.setCursor(0, 56);
-    display.print(F("Device: "));
-    String deviceName = bluetoothManager.getDeviceName();
-    if (deviceName.length() > 10) {
-        deviceName = deviceName.substring(0, 10) + "..";
-    }
-    display.print(deviceName);
-    
-    display.display();
 }

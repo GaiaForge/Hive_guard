@@ -9,6 +9,7 @@
 #include "Config.h"
 #include "DataStructures.h"
 #include "Display.h"
+#include "Bluetooth.h"
 
 // Function declarations
 void enterSettingsMenu(MenuState& state, DisplayMode& mode);

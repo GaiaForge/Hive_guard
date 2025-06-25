@@ -44,8 +44,9 @@ MenuState menuState = {
 };
 
 
-// Power Manager 
+// Power Manager & Bluetooth manager
 PowerManager powerManager;
+BluetoothManager bluetoothManager;
 
 // Audio processing
 SpectralFeatures currentSpectralFeatures;
@@ -328,7 +329,7 @@ void checkForPreviousReset() {
         // Optionally show message on display
         display.clearDisplay();
         display.setTextSize(1);
-        display.setTextColor(SH1106_WHITE);
+        display.setTextColor(SH110X_WHITE);
         display.setCursor(10, 20);
         display.println(F("Factory reset"));
         display.setCursor(15, 30);
@@ -384,11 +385,11 @@ void checkForFactoryReset() {
 void showResetProgress(Adafruit_SH1106G& display, unsigned long holdTime) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     display.setCursor(25, 0);
     display.println(F("Factory Reset"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     display.setCursor(10, 20);
     display.println(F("Hold for 5 seconds"));
@@ -397,9 +398,9 @@ void showResetProgress(Adafruit_SH1106G& display, unsigned long holdTime) {
     unsigned long progress = holdTime - 2000; // Start from 2 second mark
     int barWidth = map(progress, 0, 3000, 0, 100); // 3 seconds to fill
     
-    display.drawRect(10, 35, 108, 10, SH1106_WHITE);
+    display.drawRect(10, 35, 108, 10, SH110X_WHITE);
     if (barWidth > 0) {
-        display.fillRect(11, 36, barWidth, 8, SH1106_WHITE);
+        display.fillRect(11, 36, barWidth, 8, SH110X_WHITE);
     }
     
     display.setCursor(15, 50);
@@ -417,12 +418,12 @@ void showResetProgress(Adafruit_SH1106G& display, unsigned long holdTime) {
 bool confirmFactoryReset(Adafruit_SH1106G& display) {
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     
     // Warning screen
     display.setCursor(15, 0);
     display.println(F("FACTORY RESET"));
-    display.drawLine(0, 10, 127, 10, SH1106_WHITE);
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     display.setCursor(0, 16);
     display.println(F("This will erase ALL"));

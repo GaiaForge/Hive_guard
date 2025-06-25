@@ -5,6 +5,7 @@
 
 #include "PowerManager.h"
 #include "Utils.h"
+#include "Sensors.h"  // For getBatteryLevel
 
 #ifdef NRF52_SERIES
 #include <nrf.h>
@@ -703,20 +704,4 @@ PowerMode batteryToPowerMode(float voltage) {
     }
 }
 
-// =============================================================================
-// RTC INTERRUPT HANDLER (for nRF52)
-// =============================================================================
 
-#ifdef NRF52_SERIES
-extern "C" void RTC1_IRQHandler(void) {
-    if (nrf_rtc_event_pending(NRF_RTC1, NRF_RTC_EVENT_COMPARE_0)) {
-        nrf_rtc_event_clear(NRF_RTC1, NRF_RTC_EVENT_COMPARE_0);
-        
-        // Stop RTC1
-        nrf_rtc_task_trigger(NRF_RTC1, NRF_RTC_TASK_STOP);
-        nrf_rtc_int_disable(NRF_RTC1, NRF_RTC_INT_COMPARE0_MASK);
-        
-        // We'll wake up and handle this in the main code
-    }
-}
-#endif

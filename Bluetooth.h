@@ -130,7 +130,7 @@ private:
     
     // Internal methods
     void setupBLEService();
-    void handleCommand(uint8_t* data, uint16_t len);
+    
     void sendResponse(BluetoothResponse response, uint8_t* data = nullptr, uint16_t len = 0);
     void sendCurrentData();
     void sendFileList();
@@ -138,7 +138,7 @@ private:
     void sendDailySummary(uint32_t date);
     void sendAlerts();
     void sendDeviceInfo();
-    bool isInScheduledHours(uint8_t currentHour);
+    
     void updateAdvertising();
     
 public:
@@ -179,6 +179,8 @@ public:
     // Utility
     String getDeviceName() const;
     bool shouldBeDiscoverable() const;
+    void handleCommand(uint8_t* data, uint16_t len);
+    bool isInScheduledHours(uint8_t currentHour) const;
 };
 
 // =============================================================================

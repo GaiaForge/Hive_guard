@@ -7,6 +7,7 @@
 #include "Utils.h"
 #include "Alerts.h" 
 #include "Sensors.h"
+#include "Display.h"  // For updateDiagnosticLine
 
 // Use SDLib namespace to avoid ambiguity
 using SDFile = SDLib::File;

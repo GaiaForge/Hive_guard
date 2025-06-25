@@ -530,7 +530,7 @@ void BluetoothManager::setManualTimeout(uint8_t minutes) {
     Serial.println(F(" minutes"));
 }
 
-bool BluetoothManager::isInScheduledHours(uint8_t currentHour) {
+bool BluetoothManager::isInScheduledHours(uint8_t currentHour) const {
     if (settings.scheduleStartHour <= settings.scheduleEndHour) {
         // Normal case: 7:00 - 18:00
         return (currentHour >= settings.scheduleStartHour && currentHour < settings.scheduleEndHour);

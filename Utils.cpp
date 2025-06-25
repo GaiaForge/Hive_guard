@@ -383,7 +383,7 @@ void performFactoryReset(SystemSettings& settings, SystemStatus& status,
     // Show progress on display
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     display.setCursor(20, 20);
     display.println(F("Resetting..."));
     display.setCursor(10, 30);
@@ -419,7 +419,7 @@ void performFactoryReset(SystemSettings& settings, SystemStatus& status,
     // Show completion message
     display.clearDisplay();
     display.setTextSize(1);
-    display.setTextColor(SH1106_WHITE);
+    display.setTextColor(SH110X_WHITE);
     display.setCursor(15, 20);
     display.println(F("Reset complete"));
     display.setCursor(10, 30);

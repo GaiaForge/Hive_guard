@@ -11,7 +11,7 @@
 #include <SPI.h>
 #include <RTClib.h>
 #include <SD.h>
-#include <Adafruit_SH1106G.h>
+#include <Adafruit_SH110X.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_BME280.h>
 

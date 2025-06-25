@@ -7,7 +7,7 @@
 #include "Utils.h"
 
 // Alert history for preventing spam
-static unsigned long lastAlertTime[7] = {0, 0, 0, 0, 0, 0, 0};  
+static unsigned long lastAlertTime[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 const unsigned long ALERT_COOLDOWN = 300000; // 5 minutes
 
 // =============================================================================

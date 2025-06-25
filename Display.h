@@ -3,9 +3,12 @@
  * Display management header
  */
 
+
+
 #ifndef DISPLAY_H
 #define DISPLAY_H
 
+#include "Audio.h"  // For SpectralFeatures and ActivityTrend
 #include "Config.h"
 #include "DataStructures.h"
 #include "Sensors.h"
