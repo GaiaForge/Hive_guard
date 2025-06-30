@@ -20,7 +20,7 @@
 // POWER CONSUMPTION CONSTANTS (mA)
 // =============================================================================
 
-const float PowerManager::POWER_NORMAL_MA = 15.0f;    // Base system consumption
+const float PowerManager::POWER_TESTING_MA = 15.0f;    // Base system consumption
 const float PowerManager::POWER_DISPLAY_MA = 8.0f;    // OLED display
 const float PowerManager::POWER_SENSORS_MA = 2.0f;    // BME280 active
 const float PowerManager::POWER_AUDIO_MA = 5.0f;      // Microphone sampling
@@ -32,7 +32,7 @@ const float PowerManager::POWER_SLEEP_MA = 0.05f;     // Deep sleep mode
 
 PowerManager::PowerManager() {
     // Initialize status
-    status.currentMode = POWER_NORMAL;
+    status.currentMode = POWER_TESTING;
     status.fieldModeActive = false;
     status.displayOn = true;
     status.displayTimeoutMs = 5 * 60 * 1000; // 5 minutes default
@@ -47,6 +47,10 @@ PowerManager::PowerManager() {
     status.displayState = COMP_POWER_ON;
     status.sensorState = COMP_POWER_ON;
     status.audioState = COMP_POWER_ON;
+    status.wokenByTimer = false;
+    status.lastLogTime = 0;
+    status.nextWakeTime = 0;
+    status.lastFlushTime = 0;
     
     // Initialize settings
     settings.fieldModeEnabled = false;
@@ -155,7 +159,7 @@ void PowerManager::enableFieldMode() {
 void PowerManager::disableFieldMode() {
     settings.fieldModeEnabled = false;
     status.fieldModeActive = false;
-    status.currentMode = POWER_NORMAL;
+    status.currentMode = POWER_TESTING;
     
     // Update system settings
     if (systemSettings) {
@@ -367,17 +371,6 @@ void PowerManager::prepareSleep() {
     lastSleepTime = millis();
 }
 
-void PowerManager::wakeFromSleep() {
-    Serial.println(F("Waking from sleep..."));
-    
-    // Power up essential components
-    powerUpSensors();
-    
-    // Don't automatically power up display in field mode
-    if (!status.fieldModeActive) {
-        turnOnDisplay();
-    }
-}
 
 bool PowerManager::canEnterSleep() const {
     // Don't sleep if display is on (user is interacting)
@@ -385,8 +378,8 @@ bool PowerManager::canEnterSleep() const {
         return false;
     }
     
-    // Don't sleep in normal mode
-    if (status.currentMode == POWER_NORMAL) {
+    // Don't sleep in testing mode
+    if (status.currentMode == POWER_TESTING) {
         return false;
     }
     
@@ -398,9 +391,10 @@ bool PowerManager::canEnterSleep() const {
     return timeSinceLastSleep >= minSleepInterval;
 }
 
+// Replace the existing shouldEnterSleep() method:
 bool PowerManager::shouldEnterSleep() {
-    // Never sleep in normal mode (for development)
-    if (status.currentMode == POWER_NORMAL) {
+    // Only sleep in field mode
+    if (!status.fieldModeActive) {
         return false;
     }
     
@@ -409,18 +403,61 @@ bool PowerManager::shouldEnterSleep() {
         return false;
     }
     
-    // Don't sleep if we just woke up (prevent immediate re-sleep)
-    if (millis() - status.lastUserActivity < 30000) { // 30 second minimum awake time
-        return false;
-    }
+    // Check if we've taken a reading recently
+    unsigned long timeSinceLastLog = millis() - status.lastLogTime;
     
-    // In field mode, sleep when display has been off for a while
-    if (status.fieldModeActive) {
-        unsigned long timeSinceDisplayOff = millis() - displayOffTime;
-        return timeSinceDisplayOff > 60000; // 1 minute after display off
+    // If we just took a reading, we can sleep
+    if (timeSinceLastLog < 5000) { // Within 5 seconds of taking a reading
+        return true;
     }
     
     return false;
+}
+
+// Add new methods:
+bool PowerManager::shouldTakeReading() const {
+    if (!status.fieldModeActive) {
+        return false;
+    }
+    
+    unsigned long currentTime = millis();
+    return (currentTime >= status.nextWakeTime);
+}
+
+void PowerManager::updateNextWakeTime(uint8_t logIntervalMinutes) {
+    status.lastLogTime = millis();
+    status.nextWakeTime = status.lastLogTime + (logIntervalMinutes * 60000UL);
+}
+
+bool PowerManager::isTimeForBufferFlush() const {
+    // Flush buffer every hour
+    unsigned long timeSinceFlush = millis() - status.lastFlushTime;
+    return (timeSinceFlush >= 3600000UL); // 1 hour in milliseconds
+}
+
+void PowerManager::setWakeSource(bool fromTimer) {
+    status.wokenByTimer = fromTimer;
+}
+
+bool PowerManager::wasWokenByTimer() const {
+    return status.wokenByTimer;
+}
+
+
+void PowerManager::wakeFromSleep() {
+    Serial.println(F("Waking from sleep..."));
+    
+    // Power up sensors
+    powerUpSensors();
+    
+    // Only power up display if woken by button
+    if (!status.wokenByTimer) {
+        turnOnDisplay();
+        status.lastUserActivity = millis();
+    }
+    
+    // Always power up audio for readings
+    powerUpAudio();
 }
 
 // =============================================================================
@@ -437,7 +474,7 @@ void PowerManager::updatePowerMode(float batteryVoltage) {
     } else if (settings.fieldModeEnabled) {
         newMode = POWER_FIELD;
     } else {
-        newMode = POWER_NORMAL;
+        newMode = POWER_TESTING;
     }
     
     if (newMode != status.currentMode) {
@@ -470,7 +507,7 @@ void PowerManager::updatePowerMode(float batteryVoltage) {
                 setDisplayTimeout(5); // 5 minute timeout
                 break;
                 
-            case POWER_NORMAL:
+            case POWER_TESTING:
                 // Full functionality
                 powerUpAll();
                 break;
@@ -483,11 +520,11 @@ void PowerManager::updatePowerMode(float batteryVoltage) {
 
 
 void PowerManager::calculateRuntimeEstimate(float batteryVoltage) {
-    // Assume 2000mAh battery capacity (typical for field deployment)
-    const float BATTERY_CAPACITY_MAH = 2000.0f;
+    // 1200mAh battery capacity 
+    const float BATTERY_CAPACITY_MAH = 1200.0f;
     
     // Calculate current consumption based on active components
-    float currentConsumption = POWER_NORMAL_MA;
+    float currentConsumption = POWER_TESTING_MA;
     
     if (status.displayOn) {
         currentConsumption += POWER_DISPLAY_MA;
@@ -686,7 +723,7 @@ void PowerManager::configureButtonWakeup() {
 
 const char* powerModeToString(PowerMode mode) {
     switch (mode) {
-        case POWER_NORMAL: return "Normal";
+        case POWER_TESTING: return "Testing";  // Changed from "Normal"
         case POWER_FIELD: return "Field";
         case POWER_SAVE: return "Power Save";
         case POWER_CRITICAL: return "Critical";
@@ -700,7 +737,7 @@ PowerMode batteryToPowerMode(float voltage) {
     } else if (voltage <= BATTERY_LOW) {
         return POWER_SAVE;
     } else {
-        return POWER_NORMAL;
+        return POWER_TESTING;
     }
 }
 

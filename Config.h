@@ -135,7 +135,7 @@ const unsigned long DEBOUNCE_DELAY = 50;       // 50ms
 #define AFRICAN_EVENING_END 18       // Earlier end due to predators
 
 // =============================================================================
-// KENYAN TOP BAR HIVE SPECIFICS
+// TanzaniaN TOP BAR HIVE SPECIFICS
 // =============================================================================
 
 // Different thermal dynamics than Langstroth

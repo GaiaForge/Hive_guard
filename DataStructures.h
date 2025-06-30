@@ -181,6 +181,34 @@ struct DailyPattern {
     bool abnormalPattern;          // Deviation from normal
 };
 
+// Add to DataStructures.h after the existing structures
+
+// =============================================================================
+// BUFFERED READINGS FOR FIELD MODE
+// =============================================================================
+
+struct BufferedReading {
+    uint32_t timestamp;
+    float temperature;
+    float humidity;
+    float pressure;
+    uint16_t frequency;
+    uint8_t soundLevel;
+    uint8_t beeState;
+    float batteryVoltage;
+    uint8_t alertFlags;
+};
+
+// Buffer for 1 hour of readings at 5-min intervals = 12 readings max
+#define MAX_BUFFERED_READINGS 12
+
+struct FieldModeBuffer {
+    BufferedReading readings[MAX_BUFFERED_READINGS];
+    uint8_t count;
+    uint8_t writeIndex;
+    uint32_t lastFlushTime;
+};
+
 // =============================================================================
 // FUNCTION DECLARATIONS
 // =============================================================================

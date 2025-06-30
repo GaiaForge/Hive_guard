@@ -8,21 +8,20 @@
 // =============================================================================
 // SENSOR INITIALIZATION
 // =============================================================================
-
 void initializeSensors(Adafruit_BME280& bme, SystemStatus& status) {
     // Initialize BME280 (handles temp, humidity, AND pressure)
     if (bme.begin(0x77) || bme.begin(0x76)) {
-        status.bmeWorking = true;  // Reuse for BME280
+        status.bmeWorking = true;
         
-        // Configure BME280
-        bme.setSampling(Adafruit_BME280::MODE_NORMAL,
-                        Adafruit_BME280::SAMPLING_X2,   // temperature
-                        Adafruit_BME280::SAMPLING_X2,   // pressure  
-                        Adafruit_BME280::SAMPLING_X2,   // humidity
+        // Configure BME280 for forced mode (power efficient)
+        bme.setSampling(Adafruit_BME280::MODE_FORCED,     // Take reading then sleep
+                        Adafruit_BME280::SAMPLING_X2,     // temperature
+                        Adafruit_BME280::SAMPLING_X2,     // pressure  
+                        Adafruit_BME280::SAMPLING_X2,     // humidity
                         Adafruit_BME280::FILTER_X16,
                         Adafruit_BME280::STANDBY_MS_500);
         
-        Serial.println(F("BME280 initialized"));
+        Serial.println(F("BME280 initialized (forced mode)"));
     } else {
         Serial.println(F("BME280 not found"));
         status.bmeWorking = false;
@@ -34,8 +33,12 @@ void readAllSensors(Adafruit_BME280& bme, SensorData& data,
     // Read battery first
     readBattery(data);
     
-    // Read BME280 - gets all three readings from one sensor
+    // Read BME280 - trigger forced measurement
     if (status.bmeWorking) {
+        // In forced mode, we need to trigger a measurement
+        bme.takeForcedMeasurement();
+        
+        // Now read the results
         float temp = bme.readTemperature();
         float humidity = bme.readHumidity();
         float pressure = bme.readPressure() / 100.0;  // Convert to hPa
@@ -55,6 +58,7 @@ void readAllSensors(Adafruit_BME280& bme, SensorData& data,
         data.sensorsValid = false;
     }
 }
+
 
 // =============================================================================
 // BATTERY MONITORING

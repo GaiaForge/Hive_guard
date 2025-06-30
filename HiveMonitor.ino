@@ -1,6 +1,6 @@
 /**
  * HiveMonitor.ino - UPDATED with PowerManager Integration
- * Main file for Kenya Hive Monitor System
+ * Main file for Tanzania Hive Monitor System
  */
 
 #include "Config.h"
@@ -14,6 +14,7 @@
 #include "Alerts.h"
 #include "Utils.h"
 #include "PowerManager.h" 
+#include "FieldModeBuffer.h"
 
 // Function declarations
 void checkForFactoryReset();
@@ -62,7 +63,7 @@ unsigned long lastAudioSample = 0;
 void setup() {
     Serial.begin(115200);
     while (!Serial && millis() < 3000);
-    Serial.println(F("=== Kenya Hive Monitor v2.0 ==="));
+    Serial.println(F("=== Tanzania Hive Monitor v2.0 ==="));
     
     delay(1000);
     
@@ -166,14 +167,13 @@ void setup() {
               currentSpectralFeatures, currentActivityTrend);
 }
 
-
 void loop() {
     unsigned long currentTime = millis();
     
-    // UPDATE POWER MANAGER with current battery voltage - FIXED
+    // UPDATE POWER MANAGER with current battery voltage
     static unsigned long lastPowerUpdate = 0;
     if (currentTime - lastPowerUpdate >= 10000) { // Update every 10 seconds
-        powerManager.updatePowerMode(currentData.batteryVoltage); // Pass actual voltage
+        powerManager.updatePowerMode(currentData.batteryVoltage);
         lastPowerUpdate = currentTime;
     }
     powerManager.update();
@@ -196,6 +196,7 @@ void loop() {
     if (wasButtonPressed(0) || wasButtonPressed(1) || 
         wasButtonPressed(2) || wasButtonPressed(3)) {
         powerManager.handleUserActivity();
+        powerManager.setWakeSource(false); // Woken by button
     }
     
     // Handle button presses for main navigation (only if display is on)
@@ -242,42 +243,109 @@ void loop() {
         return;
     }
     
-    // Read sensors
-    if (currentTime - lastSensorRead >= SENSOR_INTERVAL) {
-        readAllSensors(bme, currentData, settings, systemStatus);
-        checkAlerts(currentData, settings, systemStatus);
-        lastSensorRead = currentTime;
-    }
-    
-    // Audio sampling (only if not in power save mode)
-    
-    
-    if (systemStatus.pdmWorking && 
-        powerManager.getCurrentPowerMode() != POWER_CRITICAL &&
-        (currentTime - lastAudioSample >= AUDIO_INTERVAL)) {
-        
-        processAudio(currentData, settings);
-        
-        // Add new spectral analysis (with safety check)
-        if (audioSampleIndex > 0) {
-            currentSpectralFeatures = analyzeAudioFFT();
+    // FIELD MODE SLEEP/WAKE CYCLE
+    if (powerManager.isFieldModeActive()) {
+        // Check if it's time to take a reading
+        if (powerManager.shouldTakeReading()) {
+            Serial.println(F("Field mode: Taking scheduled reading"));
             
-            // Update activity trend (need current hour)
-            if (systemStatus.rtcWorking) {
-                DateTime now = rtc.now();
-                updateActivityTrend(currentActivityTrend, currentSpectralFeatures, now.hour());
+            // Take readings
+            readAllSensors(bme, currentData, settings, systemStatus);
+            
+            // Process audio for 1 second
+            if (systemStatus.pdmWorking) {
+                unsigned long audioStart = millis();
+                while (millis() - audioStart < 1000) {
+                    processAudio(currentData, settings);
+                    delay(10);
+                }
+                
+                // Analyze the collected audio
+                if (audioSampleIndex > 0) {
+                    currentSpectralFeatures = analyzeAudioFFT();
+                    AudioAnalysis analysis = analyzeAudioBuffer();
+                    currentData.dominantFreq = analysis.dominantFreq;
+                    currentData.soundLevel = analysis.soundLevel;
+                    currentData.beeState = classifyBeeState(analysis, settings);
+                    audioSampleIndex = 0; // Reset buffer
+                }
             }
+            
+            // Check alerts
+            checkAlerts(currentData, settings, systemStatus);
+            
+            // Add to buffer instead of writing directly
+            uint32_t timestamp = systemStatus.rtcWorking ? rtc.now().unixtime() : millis()/1000;
+            fieldBuffer.addReading(currentData, timestamp);
+            
+            // Update next wake time
+            powerManager.updateNextWakeTime(settings.logInterval);
+            
+            // Check if we should flush buffer to SD (hourly or when full)
+            if (fieldBuffer.getBufferCount() >= 12 || // Buffer full
+                (millis() - fieldBuffer.getBuffer().lastFlushTime) >= 3600000UL) { // 1 hour
+                
+                Serial.println(F("Field mode: Flushing buffer to SD"));
+                fieldBuffer.flushToSD(rtc, systemStatus);
+            }
+            
+            // Mark that we were woken by timer for next sleep
+            powerManager.setWakeSource(true);
         }
         
-        lastAudioSample = currentTime;
-    }
+        // Check if we should go back to sleep
+        if (powerManager.shouldEnterSleep()) {
+            unsigned long timeUntilNextReading = settings.logInterval * 60000UL;
+            
+            Serial.print(F("Field mode: Sleeping for "));
+            Serial.print(timeUntilNextReading / 60000);
+            Serial.println(F(" minutes"));
+            
+            powerManager.prepareSleep();
+            powerManager.enterDeepSleep(timeUntilNextReading);
+            
+            // When we wake up, we'll be at the start of loop() again
+            powerManager.setWakeSource(true);
+            powerManager.wakeFromSleep();
+        }
+    } else {
+        // TESTING MODE - Normal operation
         
-    // Data logging (only if SD card is working)
-    if (settings.logEnabled && systemStatus.sdWorking) {
-        unsigned long logIntervalMs = settings.logInterval * 60000UL;
-        if (currentTime - lastLogTime >= logIntervalMs) {
-            logData(currentData, rtc, settings, systemStatus);
-            lastLogTime = currentTime;
+        // Read sensors at regular intervals
+        if (currentTime - lastSensorRead >= SENSOR_INTERVAL) {
+            readAllSensors(bme, currentData, settings, systemStatus);
+            checkAlerts(currentData, settings, systemStatus);
+            lastSensorRead = currentTime;
+        }
+        
+        // Audio sampling (only if not in power save mode)
+        if (systemStatus.pdmWorking && 
+            powerManager.getCurrentPowerMode() != POWER_CRITICAL &&
+            (currentTime - lastAudioSample >= AUDIO_INTERVAL)) {
+            
+            processAudio(currentData, settings);
+            
+            // Add new spectral analysis (with safety check)
+            if (audioSampleIndex > 0) {
+                currentSpectralFeatures = analyzeAudioFFT();
+                
+                // Update activity trend (need current hour)
+                if (systemStatus.rtcWorking) {
+                    DateTime now = rtc.now();
+                    updateActivityTrend(currentActivityTrend, currentSpectralFeatures, now.hour());
+                }
+            }
+            
+            lastAudioSample = currentTime;
+        }
+        
+        // Data logging (only if SD card is working) - Testing mode logs directly
+        if (settings.logEnabled && systemStatus.sdWorking) {
+            unsigned long logIntervalMs = settings.logInterval * 60000UL;
+            if (currentTime - lastLogTime >= logIntervalMs) {
+                logData(currentData, rtc, settings, systemStatus);
+                lastLogTime = currentTime;
+            }
         }
     }
     
@@ -288,28 +356,6 @@ void loop() {
                     currentSpectralFeatures, currentActivityTrend);
         lastDisplayUpdate = currentTime;
     }
-    
-    // CHECK FOR SLEEP CONDITIONS 
-    if (powerManager.shouldEnterSleep()) {
-        unsigned long sleepTime = settings.logInterval * 60000UL;
-        Serial.print(F("Entering field sleep for "));
-        Serial.print(sleepTime / 60000);
-        Serial.println(F(" minutes"));
-        
-        powerManager.prepareSleep();
-        powerManager.enterDeepSleep(sleepTime);
-        powerManager.wakeFromSleep();
-        
-        // Force sensor reading after wake
-        readAllSensors(bme, currentData, settings, systemStatus);
-        checkAlerts(currentData, settings, systemStatus);
-        
-        // Log data after wake
-        if (settings.logEnabled && systemStatus.sdWorking) {
-            logData(currentData, rtc, settings, systemStatus);
-            lastLogTime = currentTime;
-        }
-    }
 
     // Check for factory reset combination
     if (!menuState.settingsMenuActive) {
@@ -317,6 +363,80 @@ void loop() {
     }
     
     delay(10);
+} 
+// FIELD MODE SLEEP/WAKE CYCLE
+if (powerManager.isFieldModeActive()) {
+    // Check if it's time to take a reading
+    if (powerManager.shouldTakeReading()) {
+        Serial.println(F("Field mode: Taking scheduled reading"));
+        
+        // Take readings
+        readAllSensors(bme, currentData, settings, systemStatus);
+        
+        // Process audio
+        if (systemStatus.pdmWorking) {
+            // Sample audio for 1 second to get good classification
+            unsigned long audioStart = millis();
+            while (millis() - audioStart < 1000) {
+                processAudio(currentData, settings);
+                delay(10);
+            }
+            
+            // Analyze the collected audio
+            if (audioSampleIndex > 0) {
+                currentSpectralFeatures = analyzeAudioFFT();
+                AudioAnalysis analysis = analyzeAudioBuffer();
+                currentData.dominantFreq = analysis.dominantFreq;
+                currentData.soundLevel = analysis.soundLevel;
+                currentData.beeState = classifyBeeState(analysis, settings);
+            }
+        }
+        
+        // Check alerts
+        checkAlerts(currentData, settings, systemStatus);
+        
+        // Add to buffer instead of writing directly
+        uint32_t timestamp = systemStatus.rtcWorking ? rtc.now().unixtime() : millis()/1000;
+        fieldBuffer.addReading(currentData, timestamp);
+        
+        // Update next wake time
+        powerManager.updateNextWakeTime(settings.logInterval);
+        
+        // Check if we should flush buffer to SD (hourly)
+        if (fieldBuffer.getBufferCount() >= 12 || // Buffer full
+            (millis() - fieldBuffer.getBuffer().lastFlushTime) >= 3600000UL) { // 1 hour
+            
+            Serial.println(F("Field mode: Flushing buffer to SD"));
+            fieldBuffer.flushToSD(rtc, systemStatus);
+        }
+        
+        // Mark that we were woken by timer for next sleep
+        powerManager.setWakeSource(true);
+    }
+    
+    // Check if we should go back to sleep
+    if (powerManager.shouldEnterSleep()) {
+        unsigned long timeUntilNextReading = settings.logInterval * 60000UL;
+        
+        Serial.print(F("Field mode: Sleeping for "));
+        Serial.print(timeUntilNextReading / 60000);
+        Serial.println(F(" minutes"));
+        
+        powerManager.prepareSleep();
+        powerManager.enterDeepSleep(timeUntilNextReading);
+        
+        // When we wake up, determine why
+        // For now, assume timer wake (button wake would be handled by interrupt)
+        powerManager.setWakeSource(true);
+        powerManager.wakeFromSleep();
+    }
+}
+
+// Handle user button activity
+if (wasButtonPressed(0) || wasButtonPressed(1) || 
+    wasButtonPressed(2) || wasButtonPressed(3)) {
+    powerManager.handleUserActivity();
+    powerManager.setWakeSource(false); // Woken by button
 }
 // =============================================================================
 // STARTUP RESET CHECK

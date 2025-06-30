@@ -14,7 +14,7 @@
 // =============================================================================
 
 enum PowerMode {
-    POWER_NORMAL = 0,      // Full power, display always on
+    POWER_TESTING = 0,      // Full power, display always on
     POWER_FIELD = 1,       // Field mode, display timeout enabled
     POWER_SAVE = 2,        // Low battery, reduced functionality
     POWER_CRITICAL = 3     // Very low battery, minimal operation
@@ -40,6 +40,10 @@ enum ComponentPowerState {
 
 struct PowerStatus {
     PowerMode currentMode;
+    bool wokenByTimer;          // true if woken by RTC, false if by button
+    uint32_t lastLogTime;       // Last time we took a reading
+    uint32_t nextWakeTime;      // When to wake for next reading
+    uint32_t lastFlushTime;     // Last time buffer was flushed
     bool fieldModeActive;
     bool displayOn;
     unsigned long displayTimeoutMs;
@@ -81,7 +85,7 @@ private:
     unsigned long lastSleepTime;
     
     // Power consumption estimates (mA)
-    static const float POWER_NORMAL_MA;
+    static const float POWER_TESTING_MA;
     static const float POWER_DISPLAY_MA;
     static const float POWER_SENSORS_MA;
     static const float POWER_AUDIO_MA;
@@ -113,6 +117,13 @@ public:
     void disableFieldMode();
     bool isFieldModeActive() const;
     void updatePowerMode(float batteryVoltage);
+
+    // Field mode sleep management
+    bool shouldTakeReading() const;
+    void updateNextWakeTime(uint8_t logIntervalMinutes);
+    bool isTimeForBufferFlush() const;
+    void setWakeSource(bool fromTimer);
+    bool wasWokenByTimer() const;
     
     // Display management
     void turnOnDisplay();

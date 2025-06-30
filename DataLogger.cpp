@@ -130,7 +130,7 @@ bool hasBufferedData() {
 
 void writeLogHeader(SDFile& file, DateTime& now, SystemSettings& settings) {
     file.println(F("# HIVE MONITOR DATA LOG - MONTHLY FILE"));
-    file.println(F("# Device ID: HIVE_KENYA_001"));
+    file.println(F("# Device ID: HIVE_Tanzania_001"));
     file.println(F("# Firmware: v2.0"));
     file.print(F("# Month: "));
     file.print(now.year());
