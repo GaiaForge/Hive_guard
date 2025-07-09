@@ -393,21 +393,18 @@ bool PowerManager::canEnterSleep() const {
 
 // Replace the existing shouldEnterSleep() method:
 bool PowerManager::shouldEnterSleep() {
-    // Only sleep in field mode
     if (!status.fieldModeActive) {
         return false;
     }
     
-    // Don't sleep if display is on (user is interacting)
-    if (status.displayOn) {
-        return false;
+    // CRITICAL: Add timeout to prevent infinite sleep attempts
+    static unsigned long lastSleepAttempt = 0;
+    if (millis() - lastSleepAttempt < 5000) {
+        return false; // Don't try to sleep too frequently
     }
     
-    // Check if we've taken a reading recently
-    unsigned long timeSinceLastLog = millis() - status.lastLogTime;
-    
-    // If we just took a reading, we can sleep
-    if (timeSinceLastLog < 5000) { // Within 5 seconds of taking a reading
+    if (!status.displayOn) {
+        lastSleepAttempt = millis();
         return true;
     }
     

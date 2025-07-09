@@ -10,7 +10,13 @@
 #include "Config.h"
 #include "DataStructures.h"
 
+// Watchdog functions
+void setupWatchdog(SystemSettings& settings);
+void updateWatchdogTimeout(SystemSettings& settings);  // DECLARATION ONLY - NO IMPLEMENTATION
+void feedWatchdog();
+void checkSystemHealth(SystemStatus& status, SensorData& data);
 
+// PCF8523 RTC functions
 void configurePCF8523ForFieldUse(RTC_PCF8523& rtc);
 bool checkPCF8523Health(RTC_PCF8523& rtc);
 void printPCF8523Status(RTC_PCF8523& rtc);
@@ -54,8 +60,9 @@ bool isValidPressure(float pressure);
 // System utilities
 void performSystemReset();
 void enterDeepSleep(uint32_t seconds);
-void performFactoryReset(SystemSettings& settings, SystemStatus& status, 
+void performFactoryReset(SystemSettings& settings, SystemStatus& status,
                         Adafruit_SH1106G& display);
+
 // Debug utilities
 void printSystemInfo();
 void hexDump(uint8_t* data, size_t length);

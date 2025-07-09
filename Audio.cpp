@@ -32,25 +32,21 @@ void processAudio(SensorData& data, SystemSettings& settings) {
     static unsigned long lastSampleTime = 0;
     unsigned long currentTime = millis();
     
-    // Sample at regular intervals
     if (currentTime - lastSampleTime >= (1000 / AUDIO_SAMPLE_RATE)) {
         int audioSample = analogRead(AUDIO_INPUT_PIN);
         
         audioBuffer[audioSampleIndex] = audioSample;
         audioSampleIndex++;
         
-        // ADD THIS BUFFER OVERFLOW PROTECTION:
+        // CRITICAL FIX: Add bounds checking
         if (audioSampleIndex >= AUDIO_SAMPLE_BUFFER_SIZE) {
-            // Buffer full - analyze it
             AudioAnalysis analysis = analyzeAudioBuffer();
             
-            // Update sensor data
             data.dominantFreq = analysis.dominantFreq;
             data.soundLevel = analysis.soundLevel;
             data.beeState = classifyBeeState(analysis, settings);
             
-            // Reset buffer safely
-            audioSampleIndex = 0;
+            audioSampleIndex = 0; // Reset safely
         }
         
         lastSampleTime = currentTime;

@@ -267,17 +267,19 @@ void drawEditBluetoothMode(Adafruit_SH1106G& display, BluetoothMode mode) {
 // TIME & DATE MENU
 // =============================================================================
 
+// Suggested improvement to handleTimeDateMenu() in Menu.cpp
+
 void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state, 
-                       SystemSettings& settings, RTC_PCF8523& rtc,  // ← Changed type
+                       SystemSettings& settings, RTC_PCF8523& rtc,
                        DateTime& editDateTime, bool& editingInitialized,
                        bool* buttonPressed, SystemStatus& status) {
     
     static int editValue = 0;
     static bool inEditMode = false;
+    static bool timeChanged = false;  // Track if we need to update RTC
     
-    // Time & Date selection menu
     if (!inEditMode) {
-        // Navigation mode - move cursor up/down
+        // Navigation mode
         if (wasButtonPressed(0)) { // UP
             state.selectedItem--;
             if (state.selectedItem < 0) state.selectedItem = 4;
@@ -286,7 +288,7 @@ void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state,
             state.selectedItem++;
             if (state.selectedItem > 4) state.selectedItem = 0;
         }
-        if (wasButtonPressed(2)) { // SELECT - save
+        if (wasButtonPressed(2)) { // SELECT - enter edit mode
             inEditMode = true;
             switch (state.selectedItem) {
                 case 0: editValue = editDateTime.year(); break;
@@ -296,16 +298,23 @@ void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state,
                 case 4: editValue = editDateTime.minute(); break;
             }
         }
-        if (wasButtonPressed(3)) { // BACK - Return to settings menu
+        if (wasButtonPressed(3)) { // BACK - exit menu
+            // Update RTC only if time was changed
+            if (timeChanged && status.rtcWorking) {
+                rtc.adjust(editDateTime);
+                Serial.println(F("RTC time updated"));
+                timeChanged = false;
+            }
             state.menuLevel = 0;
             state.selectedItem = 0;
             return;
         }
         
     } else {
-        // Edit mode - modify values with long press support
-        if (wasButtonPressed(0) || shouldRepeat(0)) { // UP - Increment value
+        // Edit mode - modify values
+        if (wasButtonPressed(0) || shouldRepeat(0)) { // UP
             editValue++;
+            // Handle wraparound for each field...
             switch (state.selectedItem) {
                 case 0: if (editValue > 2050) editValue = 2020; break;
                 case 1: if (editValue > 12) editValue = 1; break;
@@ -319,8 +328,9 @@ void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state,
             }
         }
         
-        if (wasButtonPressed(1) || shouldRepeat(1)) { // DOWN - Decrement value
+        if (wasButtonPressed(1) || shouldRepeat(1)) { // DOWN
             editValue--;
+            // Handle wraparound...
             switch (state.selectedItem) {
                 case 0: if (editValue < 2020) editValue = 2050; break;
                 case 1: if (editValue < 1) editValue = 12; break;
@@ -334,61 +344,49 @@ void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state,
             }
         }
         
-        if (wasButtonPressed(2)) { // SELECT - Save value
-            // Update the DateTime object with new value
+        if (wasButtonPressed(2)) { // SELECT - save this field
+            // Update the DateTime object
             switch (state.selectedItem) {
-            case 0:
-                editDateTime = DateTime(editValue, editDateTime.month(), 
-                                    editDateTime.day(), editDateTime.hour(), 
-                                    editDateTime.minute(), editDateTime.second());
-                break;
-                case 1:
+                case 0: // Year
+                    editDateTime = DateTime(editValue, editDateTime.month(), 
+                                          editDateTime.day(), editDateTime.hour(), 
+                                          editDateTime.minute(), editDateTime.second());
+                    break;
+                case 1: // Month
                     editDateTime = DateTime(editDateTime.year(), editValue, 
                                           editDateTime.day(), editDateTime.hour(), 
                                           editDateTime.minute(), editDateTime.second());
                     break;
-                case 2:
+                case 2: // Day
                     editDateTime = DateTime(editDateTime.year(), editDateTime.month(), 
                                           editValue, editDateTime.hour(), 
                                           editDateTime.minute(), editDateTime.second());
                     break;
-                case 3:
+                case 3: // Hour
                     editDateTime = DateTime(editDateTime.year(), editDateTime.month(), 
                                           editDateTime.day(), editValue, 
                                           editDateTime.minute(), editDateTime.second());
                     break;
-                case 4:
+                case 4: // Minute
                     editDateTime = DateTime(editDateTime.year(), editDateTime.month(), 
                                           editDateTime.day(), editDateTime.hour(), 
                                           editValue, editDateTime.second());
                     break;
             }
             
-            // Update RTC if working
-            if (status.rtcWorking) {
-                rtc.adjust(editDateTime);
-                
-                // PCF8523 SPECIFIC: Ensure oscillator is running after time update
-                if (!rtc.isrunning()) {
-                    rtc.start();  // Start the oscillator if it stopped
-                }
-                
-                Serial.println(F("PCF8523 time updated"));
-            }
-            
-            // Exit edit mode
-            inEditMode = false;
+            timeChanged = true;  // Mark that time needs updating
+            inEditMode = false;  // Exit edit mode
         }
         
-        if (wasButtonPressed(3)) { // BACK - Exit edit mode without saving
+        if (wasButtonPressed(3)) { // BACK - cancel edit
             inEditMode = false;
         }
     }
     
-    // Draw the menu with edit mode indication
+    // Draw the menu
     drawTimeDateMenuWithEdit(display, state.selectedItem, editDateTime, inEditMode, editValue);
 }
-
+ 
 void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected, 
                              DateTime dt, bool editMode, int editValue) {
     display.clearDisplay();
@@ -793,7 +791,37 @@ void handleLoggingMenu(Adafruit_SH1106G& display, MenuState& state,
                 else state.editIntValue = 5;
             }
             if (wasButtonPressed(2)) { // SELECT - Save
+                // Store old interval for comparison
+                uint8_t oldInterval = settings.logInterval;
+                
+                // Update to new interval
                 settings.logInterval = state.editIntValue;
+                
+                // Update watchdog timeout if interval changed
+                if (oldInterval != settings.logInterval) {
+                    Serial.print(F("Log interval changed: "));
+                    Serial.print(oldInterval);
+                    Serial.print(F(" -> "));
+                    Serial.print(settings.logInterval);
+                    Serial.println(F(" minutes"));
+                    
+                    // Reconfigure watchdog for new interval
+                    updateWatchdogTimeout(settings);
+                    
+                    // Show confirmation on display
+                    display.clearDisplay();
+                    display.setTextSize(1);
+                    display.setTextColor(SH110X_WHITE);
+                    display.setCursor(10, 20);
+                    display.print(F("Log interval: "));
+                    display.print(settings.logInterval);
+                    display.print(F("min"));
+                    display.setCursor(5, 35);
+                    display.println(F("Watchdog updated"));
+                    display.display();
+                    delay(1500); // Show for 1.5 seconds
+                }
+                
                 editing = false;
                 saveSettings(settings);
             }

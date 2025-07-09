@@ -168,6 +168,11 @@ void setup() {
     powerManager.initialize(&systemStatus, &settings);
     updateDiagnosticLine(display, "PowerMgr: OK");
     delay(500);
+
+    // Watchdog setup
+    setupWatchdog(settings);
+    
+    Serial.println(F("=== System Ready - Watchdog Active ==="));
     
     // Show final status
     if (systemStatus.sdWorking) {
@@ -190,6 +195,9 @@ void setup() {
 void loop() {
     unsigned long currentTime = millis();
     
+    // FEED WATCHDOG AT START OF EACH LOOP ITERATION
+    feedWatchdog();
+    
     // Check for DFU requests periodically
     checkDFURequests();
     
@@ -198,16 +206,19 @@ void loop() {
     if (currentTime - lastPowerUpdate >= 10000) { // Update every 10 seconds
         powerManager.updatePowerMode(currentData.batteryVoltage);
         lastPowerUpdate = currentTime;
+        feedWatchdog(); // Feed after power manager update
     }
     powerManager.update();
     
     // Periodic SD card check if not working
     static unsigned long lastSDCheck = 0;
     if (!systemStatus.sdWorking && (currentTime - lastSDCheck >= 10000)) {
+        feedWatchdog(); // Feed before potentially slow SD operations
         checkSDCard(systemStatus);
         if (systemStatus.sdWorking) {
             Serial.println(F("SD card detected and initialized!"));
             createLogFile(rtc, systemStatus);
+            feedWatchdog(); // Feed after SD card recovery
         }
         lastSDCheck = currentTime;
     }
@@ -220,6 +231,7 @@ void loop() {
         wasButtonPressed(2) || wasButtonPressed(3)) {
         powerManager.handleUserActivity();
         powerManager.setWakeSource(false); // Woken by button
+        feedWatchdog(); // Feed after user interaction
     }
     
     // Handle button presses for main navigation (only if display is on)
@@ -232,6 +244,7 @@ void loop() {
             }
             updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc, 
               currentSpectralFeatures, currentActivityTrend);
+            feedWatchdog(); // Feed after display update
         }
         
         if (wasButtonPressed(1)) { // DOWN
@@ -242,6 +255,7 @@ void loop() {
             }
             updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc, 
               currentSpectralFeatures, currentActivityTrend);
+            feedWatchdog(); // Feed after display update
         }
         
         if (wasButtonPressed(2)) { // SELECT
@@ -250,6 +264,7 @@ void loop() {
                 menuState.menuLevel = 0;
                 menuState.selectedItem = 0;
                 resetButtonStates();
+                feedWatchdog(); // Feed after menu activation
             }
         }
         
@@ -257,12 +272,15 @@ void loop() {
             currentMode = MODE_DASHBOARD;
             updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc, 
               currentSpectralFeatures, currentActivityTrend);
+            feedWatchdog(); // Feed after display update
         }
     }
 
     // Handle settings menu if active (always allow menu access)
     if (menuState.settingsMenuActive) {
+        feedWatchdog(); // Feed before menu operations
         handleSettingsMenu(display, menuState, settings, rtc, currentData, systemStatus);
+        feedWatchdog(); // Feed after menu operations
         return;
     }
     
@@ -271,15 +289,26 @@ void loop() {
         // Check if it's time to take a reading
         if (powerManager.shouldTakeReading()) {
             Serial.println(F("Field mode: Taking scheduled reading"));
+            feedWatchdog(); // Feed before long field operation
             
             // Take readings
             readAllSensors(bme, currentData, settings, systemStatus);
+            feedWatchdog(); // Feed after sensor reading
             
             // Process audio for 1 second
             if (systemStatus.pdmWorking) {
                 unsigned long audioStart = millis();
+                unsigned long lastWatchdogFeed = millis();
+                
                 while (millis() - audioStart < 1000) {
                     processAudio(currentData, settings);
+                    
+                    // Feed watchdog every 200ms during audio processing
+                    if (millis() - lastWatchdogFeed >= 200) {
+                        feedWatchdog();
+                        lastWatchdogFeed = millis();
+                    }
+                    
                     delay(10);
                 }
                 
@@ -292,6 +321,7 @@ void loop() {
                     currentData.beeState = classifyBeeState(analysis, settings);
                     audioSampleIndex = 0; // Reset buffer
                 }
+                feedWatchdog(); // Feed after audio analysis
             }
             
             // Check alerts
@@ -309,11 +339,14 @@ void loop() {
                 (millis() - fieldBuffer.getBuffer().lastFlushTime) >= 3600000UL) { // 1 hour
                 
                 Serial.println(F("Field mode: Flushing buffer to SD"));
+                feedWatchdog(); // Feed before SD operations
                 fieldBuffer.flushToSD(rtc, systemStatus);
+                feedWatchdog(); // Feed after SD operations
             }
             
             // Mark that we were woken by timer for next sleep
             powerManager.setWakeSource(true);
+            feedWatchdog(); // Feed after field mode reading complete
         }
         
         // Check if we should go back to sleep
@@ -324,12 +357,20 @@ void loop() {
             Serial.print(timeUntilNextReading / 60000);
             Serial.println(F(" minutes"));
             
+            // Prepare for sleep
             powerManager.prepareSleep();
+            
+            // DON'T feed watchdog before sleep - let it wake us if sleep fails
+            Serial.println(F("Entering sleep - watchdog will wake us if needed"));
             powerManager.enterDeepSleep(timeUntilNextReading);
             
             // When we wake up, we'll be at the start of loop() again
             powerManager.setWakeSource(true);
             powerManager.wakeFromSleep();
+            
+            // Feed watchdog immediately after wake
+            feedWatchdog();
+            Serial.println(F("Woke from field mode sleep"));
         }
     } else {
         // TESTING MODE - Normal operation
@@ -339,6 +380,7 @@ void loop() {
             readAllSensors(bme, currentData, settings, systemStatus);
             checkAlerts(currentData, settings, systemStatus);
             lastSensorRead = currentTime;
+            feedWatchdog(); // Feed after sensor reading
         }
         
         // Audio sampling (only if not in power save mode)
@@ -357,6 +399,8 @@ void loop() {
                     DateTime now = rtc.now();
                     updateActivityTrend(currentActivityTrend, currentSpectralFeatures, now.hour());
                 }
+                
+                feedWatchdog(); // Feed after audio processing
             }
             
             lastAudioSample = currentTime;
@@ -366,8 +410,10 @@ void loop() {
         if (settings.logEnabled && systemStatus.sdWorking) {
             unsigned long logIntervalMs = settings.logInterval * 60000UL;
             if (currentTime - lastLogTime >= logIntervalMs) {
+                feedWatchdog(); // Feed before SD write
                 logData(currentData, rtc, settings, systemStatus);
                 lastLogTime = currentTime;
+                feedWatchdog(); // Feed after SD write
             }
         }
     }
@@ -378,16 +424,23 @@ void loop() {
         updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
                     currentSpectralFeatures, currentActivityTrend);
         lastDisplayUpdate = currentTime;
+        feedWatchdog(); // Feed after display update
     }
+    
+    // System health monitoring (includes watchdog safety checks)
+    checkSystemHealth(systemStatus, currentData);
 
     // Check for factory reset combination
     if (!menuState.settingsMenuActive) {
         checkForFactoryReset();
+        feedWatchdog(); // Feed after factory reset check
     }
     
+    // FINAL WATCHDOG FEED AT END OF LOOP
+    feedWatchdog();
+    
     delay(10);
-} 
-
+}
 // =============================================================================
 // DFU (DEVICE FIRMWARE UPDATE) FUNCTIONS
 // =============================================================================

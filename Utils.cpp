@@ -7,6 +7,10 @@
 #include "math.h"
 #include "Settings.h"    // for saveSettings()
 #include "DataLogger.h"  // for SDLib::File
+#ifdef NRF52_SERIES
+#include <nrf.h>
+#include <nrf_wdt.h>
+#endif
 
 // =============================================================================
 // BUTTON HANDLING
@@ -406,6 +410,86 @@ void hexDump(uint8_t* data, size_t length) {
     Serial.println();
 }
 
+// 2. Watchdog Timer Functions
+void setupWatchdog(SystemSettings& settings) {
+    #ifdef NRF52_SERIES
+    // Calculate watchdog timeout based on logging interval
+    uint32_t logIntervalSeconds = settings.logInterval * 60;  // Convert minutes to seconds
+    
+    // Watchdog timeout = 2x logging interval + 60 seconds safety margin
+    // This ensures watchdog doesn't trigger during normal sleep/wake cycles
+    uint32_t watchdogTimeoutSeconds = (logIntervalSeconds * 2) + 60;
+    
+    // Constrain to reasonable limits
+    if (watchdogTimeoutSeconds < 120) {
+        watchdogTimeoutSeconds = 120;  // Minimum 2 minutes
+    }
+    if (watchdogTimeoutSeconds > 7200) {
+        watchdogTimeoutSeconds = 7200; // Maximum 2 hours
+    }
+    
+    Serial.print(F("Setting up adaptive watchdog timer: "));
+    Serial.print(watchdogTimeoutSeconds);
+    Serial.println(F(" seconds"));
+    Serial.print(F("Based on log interval: "));
+    Serial.print(settings.logInterval);
+    Serial.println(F(" minutes"));
+    
+    // Configure watchdog with calculated timeout
+    NRF_WDT->CONFIG = (WDT_CONFIG_HALT_Pause << WDT_CONFIG_HALT_Pos) | 
+                      (WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos);
+    NRF_WDT->CRV = watchdogTimeoutSeconds * 32768; // Convert to RTC ticks
+    NRF_WDT->RREN |= WDT_RREN_RR0_Msk;
+    NRF_WDT->TASKS_START = 1;
+    
+    Serial.println(F("Adaptive watchdog enabled"));
+    
+    #else
+    Serial.println(F("Watchdog not available on this platform"));
+    #endif
+}
+
+void feedWatchdog() {
+    #ifdef NRF52_SERIES
+    NRF_WDT->RR[0] = WDT_RR_RR_Reload;
+    #endif
+}
+
+void updateWatchdogTimeout(SystemSettings& settings) {
+    #ifdef NRF52_SERIES
+    Serial.println(F("Reconfiguring watchdog for new logging interval..."));
+    
+    // Stop current watchdog (if possible - may need full reset)
+    // Note: On nRF52, once started, watchdog cannot be stopped
+    // So we'll just reconfigure the timeout value
+    
+    // Calculate new timeout
+    uint32_t logIntervalSeconds = settings.logInterval * 60;
+    uint32_t watchdogTimeoutSeconds = (logIntervalSeconds * 2) + 60;
+    
+    // Constrain to reasonable limits
+    if (watchdogTimeoutSeconds < 120) {
+        watchdogTimeoutSeconds = 120;
+    }
+    if (watchdogTimeoutSeconds > 7200) {
+        watchdogTimeoutSeconds = 7200;
+    }
+    
+    // For nRF52, we need to restart the system to change watchdog timeout
+    // This is a limitation of the nRF52 watchdog - once started, it can't be reconfigured
+    Serial.print(F("New watchdog timeout would be: "));
+    Serial.print(watchdogTimeoutSeconds);
+    Serial.println(F(" seconds"));
+    Serial.println(F("Note: Watchdog timeout will apply after next system restart"));
+    
+    // Alternative: Just inform user that change will take effect on restart
+    // The new timeout will be applied when setupWatchdog() is called on next boot
+    
+    #else
+    Serial.println(F("Watchdog reconfiguration not available on this platform"));
+    #endif
+}
+
 // =============================================================================
 // ERROR HANDLING
 // =============================================================================
@@ -480,4 +564,115 @@ void performFactoryReset(SystemSettings& settings, SystemStatus& status,
     
     // Reset the system
     performSystemReset();
+}
+
+
+// =============================================================================
+// SYSTEM HEALTH MONITORING
+// =============================================================================
+
+void checkSystemHealth(SystemStatus& status, SensorData& data) {
+    static unsigned long lastHealthCheck = 0;
+    if (millis() - lastHealthCheck < 30000) return; // Check every 30 seconds
+    lastHealthCheck = millis();
+    
+    // Always feed watchdog during health check
+    feedWatchdog();
+    
+    // Check for stuck sensors
+    static float lastTemp = -999; // Use -999 as "uninitialized" marker
+    static int stuckSensorCount = 0;
+    
+    if (lastTemp != -999 && abs(data.temperature - lastTemp) < 0.1) {
+        stuckSensorCount++;
+        if (stuckSensorCount > 10) { // Same reading for 5 minutes
+            Serial.println(F("WARNING: Sensors may be stuck"));
+            // Don't disable sensors - might just be stable environment
+            // Log to SD if available
+            if (status.sdWorking) {
+                SDLib::File healthLog = SD.open("/health.log", FILE_WRITE);
+                if (healthLog) {
+                    healthLog.print(millis());
+                    healthLog.print(F(",SENSOR_STUCK,"));
+                    healthLog.println(data.temperature);
+                    healthLog.close();
+                }
+            }
+        }
+    } else {
+        stuckSensorCount = 0;
+        lastTemp = data.temperature;
+    }
+    
+    // Check audio buffer overflow
+    extern volatile int audioSampleIndex;
+    if (audioSampleIndex >= AUDIO_SAMPLE_BUFFER_SIZE) {
+        Serial.println(F("WARNING: Audio buffer overflow - resetting"));
+        audioSampleIndex = 0; // Emergency reset
+        
+        // Log the overflow
+        if (status.sdWorking) {
+            SDLib::File healthLog = SD.open("/health.log", FILE_WRITE);
+            if (healthLog) {
+                healthLog.print(millis());
+                healthLog.println(F(",AUDIO_OVERFLOW"));
+                healthLog.close();
+            }
+        }
+    }
+    
+    // Check memory usage
+    int freeMemory = getFreeMemory();
+    if (freeMemory < 1000) { // Less than 1KB free
+        Serial.print(F("WARNING: Low memory: "));
+        Serial.print(freeMemory);
+        Serial.println(F(" bytes"));
+        
+        // Log memory warning
+        if (status.sdWorking) {
+            SDLib::File healthLog = SD.open("/health.log", FILE_WRITE);
+            if (healthLog) {
+                healthLog.print(millis());
+                healthLog.print(F(",LOW_MEMORY,"));
+                healthLog.println(freeMemory);
+                healthLog.close();
+            }
+        }
+    }
+    
+    // Check system uptime and log periodic health status
+    static unsigned long lastHealthLog = 0;
+    if (millis() - lastHealthLog > 3600000UL) { // Log every hour
+        lastHealthLog = millis();
+        
+        Serial.println(F("=== Hourly Health Check ==="));
+        Serial.print(F("Uptime: ")); Serial.print(millis() / 3600000); Serial.println(F(" hours"));
+        Serial.print(F("Free Memory: ")); Serial.print(freeMemory); Serial.println(F(" bytes"));
+        Serial.print(F("RTC: ")); Serial.println(status.rtcWorking ? "OK" : "FAIL");
+        Serial.print(F("BME280: ")); Serial.println(status.bmeWorking ? "OK" : "FAIL");
+        Serial.print(F("SD Card: ")); Serial.println(status.sdWorking ? "OK" : "FAIL");
+        Serial.print(F("Audio: ")); Serial.println(status.pdmWorking ? "OK" : "FAIL");
+        Serial.print(F("Display: ")); Serial.println(status.displayWorking ? "OK" : "FAIL");
+        Serial.println(F("=========================="));
+        
+        // Log to SD card for field monitoring
+        if (status.sdWorking) {
+            SDLib::File healthLog = SD.open("/health.log", FILE_WRITE);
+            if (healthLog) {
+                healthLog.print(millis());
+                healthLog.print(F(",HOURLY_STATUS,"));
+                healthLog.print(F("RTC:")); healthLog.print(status.rtcWorking ? 1 : 0);
+                healthLog.print(F(",BME:")); healthLog.print(status.bmeWorking ? 1 : 0);
+                healthLog.print(F(",SD:")); healthLog.print(status.sdWorking ? 1 : 0);
+                healthLog.print(F(",AUDIO:")); healthLog.print(status.pdmWorking ? 1 : 0);
+                healthLog.print(F(",DISP:")); healthLog.print(status.displayWorking ? 1 : 0);
+                healthLog.print(F(",MEM:")); healthLog.print(freeMemory);
+                healthLog.print(F(",TEMP:")); healthLog.println(data.temperature);
+                healthLog.close();
+            }
+        }
+    }
+    
+    // Feed watchdog at end of health check
+    feedWatchdog();
 }
