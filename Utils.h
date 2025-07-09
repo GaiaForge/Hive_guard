@@ -1,6 +1,6 @@
 /**
  * Utils.h
- * Utility functions header
+ * Utility functions header - nRF52 Hive Monitor System
  */
 
 #ifndef UTILS_H
@@ -10,18 +10,54 @@
 #include "Config.h"
 #include "DataStructures.h"
 
-// Watchdog functions
-void setupWatchdog(SystemSettings& settings);
-void updateWatchdogTimeout(SystemSettings& settings);  // DECLARATION ONLY - NO IMPLEMENTATION
-void feedWatchdog();
-void checkSystemHealth(SystemStatus& status, SensorData& data);
+// =============================================================================
+// MEMORY MANAGEMENT STRUCTURES
+// =============================================================================
 
-// PCF8523 RTC functions
+// Memory information structure for nRF52 system
+struct MemoryInfo {
+    uint32_t total_ram;          // Total system RAM (256KB)
+    uint32_t app_ram_size;       // Available to application
+    uint32_t stack_size;         // Total stack size
+    uint32_t heap_size;          // Total heap size
+    uint32_t static_size;        // BSS + DATA sections
+    uint32_t free_heap;          // Current free heap
+    uint32_t free_stack;         // Current free stack
+    uint32_t used_stack;         // Current used stack
+    uint32_t largest_free_block; // Largest contiguous free block
+};
+
+// =============================================================================
+// MEMORY FUNCTIONS
+// =============================================================================
+
+int getFreeMemory();
+int getFreeHeap();
+int getFreeStack();
+int getUsedStack();
+MemoryInfo getMemoryInfo();
+void printMemoryInfo();
+
+// Development/debugging functions
+void initStackWatermark();
+int getStackHighWaterMark();
+
+// Field deployment functions
+bool isMemoryHealthy();
+uint8_t getMemoryUsagePercent();
+
+// =============================================================================
+// PCF8523 RTC FUNCTIONS
+// =============================================================================
+
 void configurePCF8523ForFieldUse(RTC_PCF8523& rtc);
 bool checkPCF8523Health(RTC_PCF8523& rtc);
 void printPCF8523Status(RTC_PCF8523& rtc);
 
-// Button handling functions
+// =============================================================================
+// BUTTON HANDLING FUNCTIONS
+// =============================================================================
+
 void updateButtonStates();
 bool wasButtonPressed(int button);
 bool isButtonHeld(int button);
@@ -30,44 +66,72 @@ bool shouldRepeat(int button);
 void resetButtonStates();
 bool readButton(int buttonNum);
 
-// String conversion functions
+// =============================================================================
+// STRING CONVERSION FUNCTIONS
+// =============================================================================
+
 const char* getBeeStateString(uint8_t state);
 const char* getMonthName(int month);
 
-// Date/time functions
+// =============================================================================
+// DATE/TIME FUNCTIONS
+// =============================================================================
+
 int getDaysInMonth(int month, int year);
 bool isLeapYear(int year);
 String formatTimestamp(DateTime dt);
 
-// Mathematical functions
+// =============================================================================
+// MATHEMATICAL FUNCTIONS
+// =============================================================================
+
 float calculateDewPoint(float temperature, float humidity);
 float celsiusToFahrenheit(float celsius);
 float fahrenheitToCelsius(float fahrenheit);
 
-// Statistical functions
+// =============================================================================
+// STATISTICAL FUNCTIONS
+// =============================================================================
+
 float calculateAverage(float* values, int count);
 float calculateStandardDeviation(float* values, int count);
 
-// Memory functions
-int getFreeMemory();
-void printMemoryInfo();
+// =============================================================================
+// VALIDATION FUNCTIONS
+// =============================================================================
 
-// Validation functions
 bool isValidTemperature(float temp);
 bool isValidHumidity(float humidity);
 bool isValidPressure(float pressure);
 
-// System utilities
+// =============================================================================
+// SYSTEM UTILITIES
+// =============================================================================
+
 void performSystemReset();
 void enterDeepSleep(uint32_t seconds);
-void performFactoryReset(SystemSettings& settings, SystemStatus& status,
+void performFactoryReset(SystemSettings& settings, SystemStatus& status, 
                         Adafruit_SH1106G& display);
 
-// Debug utilities
+// Watchdog functions
+void setupWatchdog(SystemSettings& settings);
+void feedWatchdog();
+void updateWatchdogTimeout(SystemSettings& settings);
+
+// System health monitoring
+void checkSystemHealth(SystemStatus& status, SensorData& data);
+
+// =============================================================================
+// DEBUG UTILITIES
+// =============================================================================
+
 void printSystemInfo();
 void hexDump(uint8_t* data, size_t length);
 
-// Error handling
+// =============================================================================
+// ERROR HANDLING
+// =============================================================================
+
 void handleError(const char* errorMsg, bool fatal);
 
 #endif // UTILS_H

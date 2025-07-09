@@ -26,16 +26,16 @@ BluetoothManager::BluetoothManager()
       statusCharacteristic(BT_STATUS_CHAR_UUID)
 #endif
 {
-    // Initialize settings
-    settings.mode = BT_MODE_MANUAL;  // Default to manual mode
+    // Initialize settings - DEFAULT TO ALWAYS ON FOR TESTING
+    settings.mode = BT_MODE_ALWAYS_ON;  // Changed from BT_MODE_MANUAL
     settings.manualTimeoutMin = BT_MANUAL_TIMEOUT_DEFAULT;
     settings.scheduleStartHour = 7;   // 7 AM
     settings.scheduleEndHour = 18;    // 6 PM
-    settings.lowPowerMode = true;
+    settings.lowPowerMode = false;    // Full power for testing
     settings.deviceId = 1;
-    strcpy(settings.hiveName, "Hive_01");           // Default name
-    strcpy(settings.location, "Tree_A");            // Default location  
-    strcpy(settings.beekeeper, "Field_User");       // Default beekeeper
+    strcpy(settings.hiveName, "HiveTest");         // Testing name
+    strcpy(settings.location, "DevLab");           // Development location  
+    strcpy(settings.beekeeper, "Developer");       // Developer name
     
     // Initialize state
     state.status = BT_STATUS_OFF;

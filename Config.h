@@ -61,7 +61,7 @@ const unsigned long DEBOUNCE_DELAY = 50;       // 50ms
 // AUDIO CONFIGURATION
 // =============================================================================
 #define AUDIO_INPUT_PIN  A4  // MAX9814 microphone input pin
-#define AUDIO_SAMPLE_BUFFER_SIZE 256
+#define AUDIO_SAMPLE_BUFFER_SIZE 128
 #define AUDIO_SAMPLE_RATE 8000
 
 // =============================================================================

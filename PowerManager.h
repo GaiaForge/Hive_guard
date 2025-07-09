@@ -153,6 +153,9 @@ public:
     unsigned long getUptime() const;
     uint32_t getSleepCycles() const;
     uint32_t getButtonPresses() const;
+
+    // Memory management
+    void printMemoryStatus() const;
     
     // Settings management
     void setDisplayTimeout(uint8_t minutes);

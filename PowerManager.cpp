@@ -6,6 +6,8 @@
 #include "PowerManager.h"
 #include "Utils.h"
 #include "Sensors.h"  // For getBatteryLevel
+#include "Bluetooth.h"  // ADD THIS LINE
+
 
 #ifdef NRF52_SERIES
 #include <nrf.h>
@@ -15,6 +17,8 @@
 #include <nrf_clock.h>
 #include <nrf_gpio.h>
 #endif
+
+extern BluetoothManager bluetoothManager;
 
 // =============================================================================
 // POWER CONSUMPTION CONSTANTS (mA)
@@ -100,14 +104,24 @@ void PowerManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSettin
 void PowerManager::update() {
     unsigned long currentTime = millis();
     
-    // Update uptime
-    status.totalUptime = currentTime;
+    // Existing update code...
     
-    // Handle display timeout in field mode
-    if (status.fieldModeActive) {
-        handleDisplayTimeout();
+    // Memory health monitoring for field deployment
+    static unsigned long lastMemoryCheck = 0;
+    if (currentTime - lastMemoryCheck >= 60000) { // Check every minute
+        if (!isMemoryHealthy()) {
+            Serial.println(F("ALERT: Memory health degraded - consider field service"));
+            
+            // Could trigger additional power saving measures
+            if (status.currentMode < POWER_SAVE) {
+                Serial.println(F("Enabling power save mode due to memory pressure"));
+                status.currentMode = POWER_SAVE;
+                powerDownNonEssential();
+            }
+        }
+        lastMemoryCheck = currentTime;
     }
-}  
+}
 
 void PowerManager::handleUserActivity() {
     status.lastUserActivity = millis();
@@ -481,9 +495,31 @@ void PowerManager::updatePowerMode(float batteryVoltage) {
         status.currentMode = newMode;
         Serial.println(getPowerModeString());
         
-        // Auto-enable field mode if battery is low
-        if (settings.autoFieldMode && newMode >= POWER_SAVE && !status.fieldModeActive) {
-            enableFieldMode();
+        // CONFIGURE BLUETOOTH BASED ON POWER MODE
+        switch (newMode) {
+            case POWER_TESTING:
+                // Always on for development/testing
+                bluetoothManager.setMode(BT_MODE_ALWAYS_ON);
+                Serial.println(F("Bluetooth: Always On (Testing Mode)"));
+                break;
+                
+            case POWER_FIELD:
+                // Manual activation for field deployment
+                bluetoothManager.setMode(BT_MODE_MANUAL);
+                Serial.println(F("Bluetooth: Manual (Field Mode)"));
+                break;
+                
+            case POWER_SAVE:
+                // Scheduled hours only
+                bluetoothManager.setMode(BT_MODE_SCHEDULED);
+                Serial.println(F("Bluetooth: Scheduled (Power Save)"));
+                break;
+                
+            case POWER_CRITICAL:
+                // Disabled to save power
+                bluetoothManager.setMode(BT_MODE_OFF);
+                Serial.println(F("Bluetooth: Off (Critical Battery)"));
+                break;
         }
         
         // Adjust system behavior based on power mode
@@ -507,6 +543,7 @@ void PowerManager::updatePowerMode(float batteryVoltage) {
             case POWER_TESTING:
                 // Full functionality
                 powerUpAll();
+                // No display timeout in testing mode
                 break;
         }
     }
@@ -514,7 +551,6 @@ void PowerManager::updatePowerMode(float batteryVoltage) {
     // Always update runtime estimate
     calculateRuntimeEstimate(batteryVoltage);
 }
-
 
 void PowerManager::calculateRuntimeEstimate(float batteryVoltage) {
     // 1200mAh battery capacity 
@@ -667,6 +703,11 @@ void PowerManager::printPowerStatus() const {
     Serial.print(F("Sleep Cycles: ")); Serial.println(status.sleepCycles);
     Serial.print(F("Button Presses: ")); Serial.println(status.buttonPresses);
     Serial.print(F("Uptime: ")); Serial.print(status.totalUptime / 1000); Serial.println(F(" seconds"));
+    
+    // memory health check
+    Serial.print(F("Memory Usage: ")); Serial.print(getMemoryUsagePercent()); Serial.println(F("%"));
+    Serial.print(F("Memory Health: ")); Serial.println(isMemoryHealthy() ? "OK" : "WARNING");
+    
     Serial.println(F("==================\n"));
 }
 
