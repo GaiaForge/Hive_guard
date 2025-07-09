@@ -1,1099 +1,1468 @@
-# Hive Guard v2.0
-## Comprehensive Field Manual
+# Tanzania Hive Monitor - Complete User Manual
+## Version 2.1 - Professional Beekeeping Monitoring System
 
 ---
 
-## Table of Contents
+# Table of Contents
 
 1. [System Overview](#system-overview)
-2. [Getting Started](#getting-started)
-3. [Navigation & Controls](#navigation--controls)
-4. [Power Management](#power-management)
-5. [Bluetooth Data Retrieval](#bluetooth-data-retrieval)
-6. [Settings Configuration](#settings-configuration)
-7. [Data Analysis](#data-analysis)
-8. [Troubleshooting](#troubleshooting)
-9. [Field Deployment Guide](#field-deployment-guide)
-10. [Battery Life Analysis](#battery-life-analysis)
+2. [Hardware Setup](#hardware-setup)
+3. [First Time Setup](#first-time-setup)
+4. [Daily Operation](#daily-operation)
+5. [Menu System & Settings](#menu-system--settings)
+6. [Field Mode Operation](#field-mode-operation)
+7. [Bluetooth Data Retrieval](#bluetooth-data-retrieval)
+8. [Alert System](#alert-system)
+9. [Firmware Updates](#firmware-updates)
+10. [Troubleshooting](#troubleshooting)
+11. [Maintenance](#maintenance)
+12. [Data Analysis](#data-analysis)
+13. [Advanced Features](#advanced-features)
 
 ---
 
-## System Overview
+# System Overview
 
-The Hive Guard v2.0 is an autonomous beehive monitoring system designed for field deployment in diverse environmental conditions. It monitors temperature, humidity, pressure, and bee acoustic behavior to provide comprehensive hive health data.
+## What the Hive Monitor Does
 
-### Key Features:
-- **Environmental Monitoring**: Temperature, humidity, atmospheric pressure
-- **Bee Behavior Analysis**: Audio frequency analysis for queen detection, swarming prediction
-- **Power Management**: 40-120 days battery life depending on configuration
-- **Bluetooth Data Transfer**: Wireless data retrieval without tree climbing
-- **Emergency Data Buffering**: Continues operation even with SD card failures
-- **Field-Optimized Design**: Weather-resistant, low-power operation
+The Tanzania Hive Monitor is a solar-powered electronic system that continuously monitors your beehive's health by tracking:
 
-### Technical Specifications:
-- **Battery**: 1200mAh LiPo (rechargeable)
-- **Operating Temperature**: -10°C to +50°C
-- **Humidity Range**: 0-100% RH
-- **Audio Range**: 50Hz - 1000Hz (optimized for bee frequencies)
-- **Data Storage**: MicroSD card (up to 32GB)
-- **Connectivity**: Bluetooth Low Energy (BLE)
-- **Display**: 128x64 OLED monochrome
+- **Temperature & Humidity** - Critical for brood development
+- **Sound Analysis** - Detects queen presence, swarming behavior, stress
+- **Activity Patterns** - Monitors daily bee activity cycles
+- **Environmental Conditions** - Tracks weather impacts on hive health
+- **Alert Generation** - Warns of critical situations requiring intervention
 
----
+## Key Features
 
-## Getting Started
+### 🔋 **Power Management**
+- **Testing Mode**: Full power, always-on display for setup and testing
+- **Field Mode**: Battery-optimized operation for weeks of autonomous monitoring
+- **Automatic Power Saving**: Adjusts operation based on battery level
 
-### Initial Setup
+### 📊 **Data Collection**
+- **Real-time Monitoring**: Continuous sensor readings every 5 seconds
+- **Data Logging**: Automatic CSV file creation with timestamps
+- **Emergency Buffering**: Stores data during SD card failures
+- **Monthly File Organization**: Automatic file management by date
 
-#### First Power-On:
-1. **Insert charged battery** into the device
-2. **Insert formatted microSD card** (FAT32, up to 32GB)
-3. **Press and hold any button** for 3 seconds to wake from shipping mode
-4. **Device will show startup screen** for 2 seconds
-5. **System diagnostics** will run automatically
+### 📱 **Connectivity**
+- **Bluetooth Data Transfer**: Wireless data retrieval with smartphone
+- **Multiple Transfer Modes**: Manual, scheduled, or always-on Bluetooth
+- **Remote Configuration**: Update settings via Bluetooth connection
 
-#### Startup Screen Example:
-```
-    🐝
-Hive Monitor
-    v2.0
-Initializing...
-```
-
-#### Diagnostic Screen Example:
-```
-System Diagnostics
-------------------
-RTC: OK
-BME280: OK
-Audio: OK
-Buttons: OK
-SD Card: OK
-PowerMgr: OK
-System: READY + SD
-```
-
-### Default Configuration:
-- **Power Mode**: Field Mode (5-minute display timeout)
-- **Bluetooth**: Manual activation mode
-- **Logging**: Every 10 minutes
-- **Alerts**: Temperature 15-40°C, Humidity 40-80%
-- **Device Name**: "Hive_01_1"
+### 🎯 **African Bee Optimized**
+- **Specialized Audio Analysis**: Tuned for African bee frequency patterns
+- **Climate Adapted**: Temperature and humidity ranges for tropical conditions
+- **Absconding Detection**: Early warning system for colony abandonment
+- **Defensive Behavior Recognition**: Identifies aggressive colony states
 
 ---
 
-## Navigation & Controls
+# Hardware Setup
 
-### Button Layout:
-```
-[UP]    [DOWN]
-[SELECT] [BACK]
-```
+## Required Components
 
-### Navigation Principles:
-- **UP/DOWN**: Navigate menu items, adjust values
-- **SELECT**: Enter submenu, confirm changes
-- **BACK**: Return to previous menu, cancel changes
-- **Long Press**: Repeat function for rapid value changes
+### Core System
+- **Adafruit Feather nRF52840 Express** (main controller)
+- **BME280 Sensor** (temperature, humidity, pressure)
+- **MAX9814 Microphone** (audio monitoring)
+- **128x64 OLED Display** (user interface)
+- **DS3231 RTC Module** (real-time clock)
+- **MicroSD Card Module** (data storage)
+- **4 Tactile Buttons** (navigation)
 
-### Main Dashboard:
-```
-12/25/2024 14:30  🔋
-----------------------
-Temp: 28.5°C
-Humidity: 65.2%
-Pressure: 1013.4 hPa
-----------------------
-STATUS: NORMAL
-```
+### Power System
+- **3.7V Li-Po Battery** (1200mAh minimum recommended)
+- **Solar Panel** (5V, 1W minimum for field deployment)
+- **Charging Circuit** (built into Feather nRF52840)
 
-### Screen Indicators:
-- **🔋**: Battery level indicator
-- **BT**: Bluetooth active
-- **SD**: SD card working
-- **!**: Active alerts
+### Enclosure
+- **Weatherproof Housing** (IP65 minimum for outdoor use)
+- **Ventilation Mesh** (for microphone access)
+- **Mounting Hardware** (for hive attachment)
 
-### Navigation Flow:
+## Physical Installation
+
+### 1. Hive Placement
 ```
-Dashboard → SELECT → Settings Menu
-    ├── Time & Date
-    ├── Sensor Calibration
-    ├── Audio Settings
-    ├── Logging
-    ├── Alert Thresholds
-    ├── System Settings
-    └── Bluetooth
+IDEAL POSITION:
+- Mount on side of hive body (not super)
+- 15-20cm from entrance
+- Protected from direct rain
+- South-facing for solar panel optimization
+- Accessible for button operation
 ```
 
----
+### 2. Sensor Positioning
+- **Microphone**: Face toward hive entrance, protected by mesh
+- **BME280**: Inside hive airspace or protected external mounting
+- **Solar Panel**: Clear sky view, 30° angle toward equator
 
-## Power Management
-
-### Power Modes Overview:
-
-#### Normal Mode:
-- **Usage**: Development, bench testing
-- **Display**: Always on
-- **Bluetooth**: Full functionality
-- **Battery Life**: 40-60 days
-- **Current Draw**: ~8-15mA
-
-#### Field Mode (Recommended):
-- **Usage**: Standard field deployment
-- **Display**: 5-minute timeout
-- **Bluetooth**: Configurable (Manual/Scheduled)
-- **Battery Life**: 60-80 days
-- **Current Draw**: ~3-8mA average
-
-#### Power Save Mode:
-- **Usage**: Low battery situations
-- **Display**: 2-minute timeout
-- **Bluetooth**: Scheduled mode only
-- **Battery Life**: 80-100 days
-- **Current Draw**: ~2-5mA average
-
-#### Critical Mode:
-- **Usage**: Emergency operation
-- **Display**: 1-minute timeout
-- **Bluetooth**: Manual only
-- **Battery Life**: 100-120 days
-- **Current Draw**: ~1-3mA average
-
-### Power Mode Configuration:
+### 3. Wiring Connections
 ```
-Settings → System → Field Mode
-    
-Field Mode Setup
-----------------
-> Field Mode: ON
-  Brightness: 7/10
-  Timeout: 5min
-  Factory Reset
-Mode: Field
-```
+I2C Devices (BME280, OLED, RTC):
+- VCC → 3.3V
+- GND → Ground
+- SDA → Pin SDA
+- SCL → Pin SCL
 
-### Battery Life Estimates:
+Audio (MAX9814):
+- VCC → 3.3V
+- GND → Ground
+- OUT → Pin A4
 
-| Configuration | Normal Use | Field Use | Critical |
-|---------------|------------|-----------|----------|
-| **Always-On BT + Full Display** | 40 days | 45 days | 50 days |
-| **Scheduled BT + Field Mode** | 60 days | 70 days | 85 days |
-| **Manual BT + Field Mode** | 75 days | 85 days | 100 days |
-| **BT Off + Critical Mode** | 90 days | 110 days | 120 days |
+SD Card:
+- VCC → 3.3V
+- GND → Ground
+- MOSI → Pin MOSI
+- MISO → Pin MISO
+- SCK → Pin SCK
+- CS → Pin 10
 
-### Power Status Screen:
-```
-Power Status
-------------
-Battery: 3.85V (65%)
-Mode: Field
-Bluetooth: Ready
-Runtime: 2 days
-Power status: Good
+Buttons:
+- UP → Pin A0
+- DOWN → Pin A1
+- SELECT → Pin A2
+- BACK → Pin A3
 ```
 
 ---
 
-## Bluetooth Data Retrieval
+# First Time Setup
 
-### Bluetooth Modes:
+## Initial Power-On
 
-#### Manual Mode (Default):
-- **Activation**: Hold SELECT + UP for 2 seconds
-- **Duration**: 30 minutes (configurable 5-120 min)
-- **Use Case**: Planned hive inspections
-- **Battery Impact**: Minimal (~1% per activation)
+1. **Connect Battery**: Plug in charged Li-Po battery
+2. **First Boot**: System will show startup screen for 3 seconds
+3. **Diagnostics**: Automatic hardware check (RTC, sensors, SD card)
+4. **Default Dashboard**: System starts in Testing Mode
 
-#### Scheduled Mode:
-- **Default Schedule**: 7:00 AM - 6:00 PM
-- **Configurable**: Any start/end hours
-- **Use Case**: Regular data collection routes
-- **Battery Impact**: Moderate (~2-5% depending on schedule)
+## Initial Configuration
 
-#### Always On Mode:
-- **Availability**: 24/7 discoverable
-- **Use Case**: Research stations, frequent access
-- **Battery Impact**: High (~5-10% total battery life)
-
-### Device Naming System:
-
-#### Naming Convention:
+### Step 1: Set Date & Time
 ```
-[HiveName]_[DeviceID]
+Navigation: SELECT → Settings → Time & Date
+1. Press UP/DOWN to select year/month/day/hour/minute
+2. Press SELECT to edit selected field
+3. Use UP/DOWN to change value
+4. Press SELECT to save
+5. Press BACK to return to main menu
+```
 
+### Step 2: Calibrate Sensors
+```
+Navigation: SELECT → Settings → Sensor Calib
+1. Place known thermometer near BME280
+2. Select "Temp Offset"
+3. Adjust to match known temperature
+4. Repeat for humidity if hygrometer available
+```
+
+### Step 3: Configure Audio Settings
+```
+Navigation: SELECT → Settings → Audio Settings
+- Sensitivity: Start with 5, adjust based on background noise
+- Queen Frequencies: 200-350 Hz (default for African bees)
+- Swarm Frequencies: 400-600 Hz
+- Stress Threshold: 70% (default)
+```
+
+### Step 4: Set Alert Thresholds
+```
+Navigation: SELECT → Settings → Alert Thresholds
+African Bee Recommended Ranges:
+- Temperature: 18°C - 35°C
+- Humidity: 40% - 80%
+```
+
+### Step 5: Configure Bluetooth
+```
+Navigation: SELECT → Settings → Bluetooth
+1. Set Device ID (1-255)
+2. Enter Hive Name (e.g., "TREE_A1")
+3. Enter Location (e.g., "NORTH_FIELD")
+4. Enter Beekeeper Name
+5. Choose Mode:
+   - Manual: Button-activated only
+   - Scheduled: Specific hours (e.g., 7AM-6PM)
+   - Always On: Continuous (high battery usage)
+```
+
+---
+
+# Daily Operation
+
+## Display Modes
+
+### Dashboard (Main Screen)
+```
+┌─────────────────────────────┐
+│ 15/03/2024 14:25      [🔋] │
+├─────────────────────────────┤
+│ Temp: 28.5°C                │
+│ Humidity: 65.2%             │
+│ Pressure: 1013.2 hPa        │
+├─────────────────────────────┤
+│ STATUS: NORMAL              │
+└─────────────────────────────┘
+```
+
+**Navigation:**
+- UP/DOWN: Switch between display modes
+- SELECT: Enter settings menu
+- BACK: Return to dashboard
+
+### Sound Monitor
+```
+┌─────────────────────────────┐
+│        Sound Monitor        │
+├─────────────────────────────┤
+│ Centroid: 285 Hz            │
+│ Level: [████░░░░░░] 45%     │
+│ Baseline: 42% (+7%)         │
+│ Pattern: NORMAL             │
+└─────────────────────────────┘
+```
+
+**Key Indicators:**
+- **Centroid**: Average frequency (queen = 200-350 Hz)
+- **Level**: Current sound intensity
+- **Baseline**: Comparison to normal activity
+- **Pattern**: NORMAL/HIGH/LOW/ABNORMAL
+
+### Alerts Screen
+```
+┌─────────────────────────────┐
+│           Alerts            │
+├─────────────────────────────┤
+│ > Temp HIGH: 36.2°C         │
+│ > Queen issue               │
+│                             │
+│                             │
+└─────────────────────────────┘
+```
+
+### Power Status
+```
+┌─────────────────────────────┐
+│        Power Status         │
+├─────────────────────────────┤
+│ Battery: 3.85V              │
+│ Level: 75%                  │
+│ Source: Battery             │
+│ Uptime: 12h                 │
+└─────────────────────────────┘
+```
+
+## Button Functions
+
+### Single Press Actions
+- **UP**: Previous screen/menu item
+- **DOWN**: Next screen/menu item  
+- **SELECT**: Enter menu/confirm selection
+- **BACK**: Exit menu/return to dashboard
+
+### Long Press Actions (Hold > 0.5 seconds)
+- **UP/DOWN**: Fast scroll in menus
+- **SELECT + BACK** (5 seconds): Factory reset
+- **UP + DOWN + SELECT** (3 seconds): DFU mode (firmware update)
+
+---
+
+# Menu System & Settings
+
+## Main Settings Menu
+
+### Time & Date
+- **Function**: Set system clock
+- **Important**: Required for accurate data logging
+- **Tip**: Use 24-hour format
+
+### Sensor Calibration
+- **Temperature Offset**: ±10°C adjustment
+- **Humidity Offset**: ±20% adjustment
+- **When to use**: If readings don't match known values
+
+### Audio Settings
+- **Sensitivity**: 0-10 (higher = more sensitive)
+- **Queen Frequencies**: Typical range 200-350 Hz
+- **Swarm Frequencies**: Typical range 400-600 Hz
+- **Stress Threshold**: Sound level indicating stress (0-100%)
+
+### Logging Settings
+- **Log Interval**: 5, 10, 30, or 60 minutes
+- **Log Enabled**: On/Off toggle
+- **Recommendation**: 10 minutes for most applications
+
+### Alert Thresholds
+Configure when system generates alerts:
+
+#### Temperature Alerts
+- **Min**: Below this triggers "TEMP_LOW" alert
+- **Max**: Above this triggers "TEMP_HIGH" alert
+- **African Bee Ranges**: 18-35°C optimal
+
+#### Humidity Alerts
+- **Min**: Below this triggers "HUMIDITY_LOW" alert  
+- **Max**: Above this triggers "HUMIDITY_HIGH" alert
+- **African Bee Ranges**: 40-80% optimal
+
+### System Settings
+- **Display Brightness**: 1-10 (higher uses more battery)
+- **Field Mode**: Enable battery optimization
+- **Display Timeout**: 1-30 minutes (field mode only)
+- **Factory Reset**: Restore all defaults
+
+### Bluetooth Settings
+- **Mode**: Off/Manual/Scheduled/Always On
+- **Manual Timeout**: 15-120 minutes when button-activated
+- **Schedule**: Start and end hours for scheduled mode
+- **Device Info**: Set name, location, beekeeper ID
+
+---
+
+# Field Mode Operation
+
+## What is Field Mode?
+
+Field Mode is a special operating mode designed for extended battery life during unattended monitoring. It automatically manages power consumption while maintaining data collection.
+
+## Enabling Field Mode
+
+### Method 1: Menu Setting
+```
+Navigation: SELECT → Settings → System → Field Mode → ON
+```
+
+### Method 2: Automatic Activation
+- System automatically enters Field Mode when battery < 50%
+- Can be disabled in System Settings
+
+## Field Mode Behavior
+
+### Power Management
+- **Display**: Turns off after 30 seconds of inactivity
+- **Sensors**: Read every 15 minutes (configurable)
+- **Audio**: Samples for 5 seconds every reading cycle
+- **Sleep**: Deep sleep between readings (< 1mA consumption)
+
+### Data Collection
+- **Buffered Logging**: Stores up to 12 readings in memory
+- **Batch Writing**: Writes to SD card hourly to reduce power
+- **Emergency Storage**: Keeps data if SD card fails
+
+### User Interaction
+- **Wake Display**: Press any button
+- **Full Functionality**: All menus available when display is on
+- **Battery Indicator**: Shows remaining runtime estimate
+
+## Field Mode Schedule
+
+```
+Example 15-minute cycle:
+00:00 - Wake up, read sensors
+00:05 - Audio analysis (5 seconds)
+00:10 - Store data in buffer
+15:00 - Repeat cycle
+
+Every hour:
+- Flush buffer to SD card
+- Check alerts
+- Update Bluetooth if scheduled
+```
+
+## Battery Life Estimates
+
+### Testing Mode (Always On)
+- **1200mAh Battery**: ~8-12 hours
+- **Solar Panel**: Can sustain if > 4 hours daily sun
+
+### Field Mode  
+- **1200mAh Battery**: ~3-4 weeks
+- **Solar Panel**: Can sustain indefinitely with minimal sun
+
+---
+
+# Bluetooth Data Retrieval
+
+## Bluetooth Modes
+
+### 1. Manual Mode (Recommended for field use)
+- **Activation**: Press any button on device
+- **Duration**: 30 minutes default (configurable 15-120 min)
+- **Power Usage**: Minimal impact on battery
+- **Use Case**: Periodic data collection visits
+
+### 2. Scheduled Mode
+- **Operation**: Automatically discoverable during set hours
+- **Example**: 7:00 AM - 6:00 PM daily
+- **Power Usage**: Moderate battery impact
+- **Use Case**: Regular monitoring with predictable access times
+
+### 3. Always On Mode
+- **Operation**: Continuously discoverable
+- **Power Usage**: High battery drain
+- **Use Case**: Testing, permanent power available
+
+## Device Discovery
+
+### Device Naming Convention
+```
+Format: [HiveName]_[DeviceID]
 Examples:
-- TopBar_A1_01 (Top Bar hive A1, device #1)
-- Village_03_12 (Village hive #3, device #12)
-- Research_Demo_01 (Research demo hive, device #1)
+- TREE_A1_01 (Tree A1, Device 1)
+- FIELD3_12 (Field 3, Device 12)
+- VILLAGE_05 (Village hive, Device 5)
 ```
 
-#### Bluetooth Configuration:
-```
-Bluetooth Setup
----------------
-> Mode: Manual
-  Manual Time: 30min
-  Start Hour: 7:00
-  End Hour: 18:00
-  Device ID: 1
-  Hive Name: TopBar_A1
-  Location: Acacia_North
-  Beekeeper: John_K
-Device: TopBar_A1_01
-```
+### Connection Process
+1. **Enable Bluetooth** on smartphone/tablet
+2. **Activate Device** (if in Manual mode)
+3. **Scan for Devices** named "HIVE*" or your custom name
+4. **Connect** (no pairing required)
+5. **Transfer Data** using compatible app
 
-### Text Editor for Names:
-```
-Edit: Hive Name
----------------
-Text: TOPBAR_A1
-Char: B
+## Data Transfer Commands
 
-UP/DN:Char SEL:Add
-BACK:Del/Save
-```
+### Available Data Types
+- **Current Readings**: Live sensor data
+- **Daily Summaries**: Aggregated daily statistics  
+- **Alert History**: Log of all triggered alerts
+- **File List**: Available CSV files for download
+- **Device Status**: Battery, uptime, system health
 
-**Character Set**: A-Z, 0-9, _ (no spaces for compatibility)
+### Data Formats
 
-### Data Retrieval Procedure:
-
-#### Step 1: Activate Bluetooth
-```
-Method A - Manual Activation:
-1. Approach hive (within 30 meters)
-2. Hold SELECT + UP buttons for 2 seconds
-3. Device beeps and shows "Manual Bluetooth activated"
-4. Bluetooth active for 30 minutes
-
-Method B - Scheduled Mode:
-1. Approach hive during scheduled hours
-2. Device automatically discoverable
-3. No button press needed
-```
-
-#### Step 2: Connect with Phone/Computer
-```
-Bluetooth Scan Results:
-📶 TopBar_A1_01
-📶 Village_03_12  
-📶 Research_Demo_01
-
-Select: TopBar_A1_01
-Status: Connected
-```
-
-#### Step 3: Data Commands
-
-##### Available Commands:
-- **PING**: Test connection
-- **GET_STATUS**: Device information
-- **GET_CURRENT**: Real-time readings
-- **LIST_FILES**: Available data files
-- **GET_FILE**: Download specific file
-- **GET_SUMMARY**: Daily summaries
-- **GET_ALERTS**: Recent alerts
-
-##### Example Data Response:
+#### Current Data (JSON)
 ```json
 {
-  "device": "TopBar_A1_01",
-  "hiveName": "TopBar_A1",
-  "location": "Acacia_North", 
-  "beekeeper": "John_K",
-  "timestamp": 1703001600,
+  "timestamp": 1679155200,
   "temperature": 28.5,
   "humidity": 65.2,
-  "pressure": 1013.4,
-  "frequency": 245,
-  "soundLevel": 35,
+  "pressure": 1013.2,
+  "frequency": 285,
+  "soundLevel": 45,
   "beeState": "NORMAL",
   "battery": 3.85,
   "alerts": "0x00"
 }
 ```
 
-#### Step 4: CSV Data Export
-
-##### File Structure:
-```
-Available Files:
-- 2024-12.CSV (Current month data)
-- alerts.log (Alert history)
-- diagnostics.log (System events)
-```
-
-##### CSV Format Example:
-```csv
-DateTime,UnixTime,Temp_C,Humidity_%,Pressure_hPa,Sound_Hz,Sound_Level,Bee_State,Battery_V,Alerts
-2024-12-25 08:00:00,1703494800,23.5,68.2,1015.3,0,15,QUIET,3.92,NONE
-2024-12-25 08:10:00,1703495400,24.1,67.8,1015.1,234,28,NORMAL,3.92,NONE
-2024-12-25 08:20:00,1703496000,24.8,67.2,1014.9,267,42,ACTIVE,3.91,NONE
-2024-12-25 08:30:00,1703496600,25.2,66.8,1014.7,289,38,QUEEN_OK,3.91,NONE
-```
-
-#### Step 5: Recommended Bluetooth Apps
-
-##### For Android (Recommended):
-
-**1. "Serial Bluetooth Terminal" by Kai Morich (FREE)**
-- **Download**: Google Play Store
-- **Features**: Simple command interface, data logging, file export
-- **Setup**: 
-  ```
-  1. Install app from Play Store
-  2. Pair with hive device (PIN: 1234 if required)
-  3. Connect to device
-  4. Send commands manually
-  5. Save/share received data
-  ```
-- **Commands to try**:
-  ```
-  PING                    (test connection)
-  GET_STATUS             (device info)
-  GET_CURRENT            (live readings)
-  GET_FILE,2024-12.CSV   (download data)
-  ```
-
-**2. "Bluetooth Terminal HC-05" by Next Prototypes (FREE)**
-- **Features**: Command history, automatic reconnection
-- **Good for**: Repeated data collection routes
-
-##### For iPhone:
-
-**1. "LightBlue Explorer" by Punch Through (FREE)**
-- **Features**: Professional BLE scanner and terminal
-- **Setup**: Connect → Find UART service → Send commands
-
-**2. "BLE Scanner" by Bluepixel Technologies (FREE)**
-- **Features**: Device discovery and basic communication
-
-##### For Computer/Laptop:
-
-**1. Python Script (Advanced Users)**:
-```python
-# Save as hive_data_collector.py
-import serial.tools.list_ports
-import bluetooth
-import time
-import csv
-
-def scan_hives():
-    """Scan for available hive devices"""
-    devices = bluetooth.discover_devices(lookup_names=True)
-    hive_devices = []
-    for addr, name in devices:
-        if "Hive" in name or "TopBar" in name or "Village" in name:
-            hive_devices.append((addr, name))
-    return hive_devices
-
-def collect_data(device_addr, filename):
-    """Collect CSV data from hive device"""
-    try:
-        sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-        sock.connect((device_addr, 1))
-        
-        # Request current data
-        sock.send(b"GET_CURRENT\n")
-        current_data = sock.recv(1024).decode()
-        
-        # Request CSV file
-        sock.send(f"GET_FILE,{filename}\n".encode())
-        csv_data = ""
-        while True:
-            chunk = sock.recv(1024).decode()
-            if not chunk or chunk.endswith("EOF"):
-                break
-            csv_data += chunk
-        
-        sock.close()
-        return current_data, csv_data
-    except Exception as e:
-        print(f"Error: {e}")
-        return None, None
-
-# Usage example
-devices = scan_hives()
-for addr, name in devices:
-    print(f"Collecting from {name}...")
-    current, csv_data = collect_data(addr, "2024-12.CSV")
-    if csv_data:
-        with open(f"{name}_data.csv", "w") as f:
-            f.write(csv_data)
-        print(f"Saved {name}_data.csv")
-```
-
-**2. "Bluetooth Terminal" (Windows/Mac)**
-- **Download**: Various terminal applications available
-- **Features**: Command-line interface for data collection
-
-##### Recommended Workflow for Field Teams:
-
-**Option A - Simple (Android Phone)**:
-```
-1. Install "Serial Bluetooth Terminal"
-2. Walk to hive location
-3. Activate hive Bluetooth (SELECT+UP, 2 sec)
-4. Connect in app
-5. Send: GET_FILE,2024-12.CSV
-6. Copy received data to email
-7. Send to researcher/headquarters
-```
-
-**Option B - Advanced (Laptop + Phone)**:
-```
-1. Use laptop with Python script
-2. Phone as hotspot for internet
-3. Automated data collection from multiple hives
-4. Direct upload to cloud storage
-5. Real-time data processing
-```
-
-**Option C - Field Team (Multiple Devices)**:
-```
-1. One team member with tablet/laptop
-2. Others use phones for status checks
-3. Coordinator collects all data
-4. Daily upload to central database
-5. WhatsApp alerts for urgent issues
-```
-
----
-
-## Settings Configuration
-
-### Time & Date Setup:
-```
-Time & Date
------------
-> Year: 2024
-  Month: Dec
-  Day: 25
-  Hour: 14
-  Minute: 30
-EDIT: UP/DN SEL:Save
-```
-
-**Navigation**: 
-- UP/DOWN: Change selected field
-- SELECT: Enter edit mode (value blinks)
-- UP/DOWN in edit: Adjust value
-- SELECT: Save and exit edit mode
-
-### Sensor Calibration:
-```
-Sensor Calibration
-------------------
-> Temp Offset: +0.5°C
-  Humid Offset: -2.0%
-
-Raw T:28.0 H:67.2
-```
-
-**Purpose**: Correct sensor readings against known references
-
-### Audio Settings:
-```
-Audio Settings
---------------
-> Sensitivity: 5/10
-  Queen Min: 200Hz
-  Queen Max: 350Hz
-  Swarm Min: 400Hz
-  Swarm Max: 600Hz
-  Stress Lvl: 70%
-```
-
-### African Bee Optimization:
-- **Queen Range**: 230-380 Hz (higher than European bees)
-- **Swarm Range**: 420-650 Hz (more aggressive swarming)
-- **Stress Threshold**: 70% (more sensitive to disturbance)
-
-### Alert Thresholds:
-```
-Alert Thresholds
-----------------
-> Temp Min: 15.0°C
-  Temp Max: 40.0°C  
-  Humid Min: 40.0%
-  Humid Max: 80.0%
-```
-
-### Field-Specific Settings:
-- **Temperature**: 18-35°C (African bee range)
-- **Humidity**: 45-75% (tropical conditions)
-
-### Logging Configuration:
-```
-Logging Setup
--------------
-> Interval: 10 min
-  Logging: ON
-```
-
-**Interval Options**: 5, 10, 30, 60 minutes
-**Recommendation**: 10 minutes for good resolution vs. storage
-
----
-
-## Data Analysis
-
-### Understanding Bee States:
-
-#### QUIET (0-20% sound level):
-- **Normal**: Night time, cold weather
-- **Concern**: During active hours (9AM-5PM)
-
-#### NORMAL (20-40% sound level):
-- **Frequency**: 150-300 Hz
-- **Meaning**: Routine hive activity
-
-#### ACTIVE (40-70% sound level):
-- **Frequency**: 200-400 Hz  
-- **Meaning**: Foraging, building, normal busy activity
-
-#### QUEEN_PRESENT (Specific frequency pattern):
-- **Frequency**: 230-380 Hz (African bees)
-- **Pattern**: Steady, consistent tone
-- **Meaning**: Queen is healthy and active
-
-#### QUEEN_MISSING (High activity, wrong frequency):
-- **Frequency**: Outside queen range
-- **Sound Level**: High (>50%)
-- **Meaning**: Possible queen loss, investigate immediately
-
-#### PRE_SWARM (High frequency, high volume):
-- **Frequency**: 420-650 Hz
-- **Sound Level**: >60%
-- **Meaning**: Swarming likely within 24-48 hours
-
-#### DEFENSIVE (Very high frequency):
-- **Frequency**: >600 Hz
-- **Sound Level**: >70%
-- **Meaning**: Bees agitated, predator or disturbance
-
-#### STRESSED (Irregular patterns):
-- **Pattern**: Erratic frequency changes
-- **Causes**: Disease, hunger, environmental stress
-
-### Daily Pattern Analysis:
-
-#### Normal African Bee Activity:
-```
-Hour    Activity    Temperature    Notes
-06:00   QUIET       22°C          Pre-dawn
-08:00   NORMAL      26°C          Early foraging
-12:00   ACTIVE      32°C          Peak activity  
-16:00   ACTIVE      34°C          Afternoon work
-18:00   NORMAL      30°C          Evening return
-22:00   QUIET       25°C          Night rest
-```
-
-#### Alert Patterns:
-
-##### Temperature Alerts:
-- **>35°C**: Heat stress, provide shade/ventilation
-- **<18°C**: Cold stress, check insulation
-- **Rapid changes**: Weather adaptation issues
-
-##### Humidity Alerts:
-- **>85%**: Ventilation needed, mold risk
-- **<30%**: Dry conditions, water source needed
-
-##### Audio Alerts:
-- **Queen silent >3 hours**: Check for queen
-- **Continuous high frequency**: Swarm preparation
-- **Night activity**: Possible predator/robbing
-
-### Data Interpretation Examples:
-
-#### Healthy Hive Pattern:
-```csv
-Time,Temp,Humidity,Frequency,Level,State
-08:00,24.5,65,245,28,NORMAL
-10:00,28.2,62,267,35,ACTIVE  
-12:00,31.8,58,289,42,ACTIVE
-14:00,33.1,55,234,38,QUEEN_OK
-16:00,31.4,58,278,40,ACTIVE
-18:00,28.7,62,201,25,NORMAL
-```
-
-#### Pre-Swarm Warning:
-```csv
-Time,Temp,Humidity,Frequency,Level,State
-08:00,25.1,64,456,65,PRE_SWARM
-10:00,29.3,61,478,72,PRE_SWARM  
-12:00,32.4,57,445,68,PRE_SWARM
-Alert: Swarm behavior detected - inspect immediately
-```
-
-#### Queen Problem:
-```csv
-Time,Temp,Humidity,Frequency,Level,State
-08:00,24.8,66,0,15,QUIET
-10:00,28.5,63,189,55,QUEEN_MISSING
-12:00,31.2,59,156,62,QUEEN_MISSING
-Alert: Queen may be missing - check for queen cells
-```
-
----
-
-## Troubleshooting
-
-### Common Issues:
-
-#### Device Won't Turn On:
-```
-Symptoms: No display, no response
-Solutions:
-1. Check battery connection
-2. Charge battery (red LED during charge)
-3. Press any button for 3 seconds
-4. Check for physical damage
-```
-
-#### SD Card Errors:
-```
-Symptoms: "SD_ERR" in alerts, no logging
-Solutions:
-1. Remove and reinsert SD card
-2. Format card (FAT32, <32GB)
-3. Check card contacts for corrosion
-4. Try different SD card
-Note: Device continues with emergency buffering
-```
-
-#### Bluetooth Connection Failed:
-```
-Symptoms: Device not found in scan
-Solutions:
-1. Activate Bluetooth manually (SELECT+UP, 2 sec)
-2. Check if in scheduled hours
-3. Move closer to device (<30m)
-4. Restart phone Bluetooth
-5. Check device battery level
-```
-
-#### Sensor Reading Errors:
-```
-Symptoms: "sensorsValid: false", no data
-Solutions:
-1. Check for condensation in housing
-2. Restart device (remove/insert battery)
-3. Check sensor calibration settings
-4. Contact support if persistent
-```
-
-#### Audio Detection Problems:
-```
-Symptoms: Always shows "QUIET" or "UNKNOWN"
-Solutions:
-1. Check microphone for blockage
-2. Adjust audio sensitivity (Settings→Audio)
-3. Calibrate in normal hive conditions
-4. Verify frequency ranges for local bees
-```
-
-### Error Messages:
-
-#### Display Messages:
-- **"Low Battery"**: <20% charge remaining
-- **"SD Card Error"**: Storage system failure
-- **"RTC Error"**: Clock system failure  
-- **"Sensor Error"**: Environmental sensor failure
-- **"Audio Error"**: Microphone system failure
-
-#### Alert Codes:
-- **0x01**: High temperature
-- **0x02**: Low temperature
-- **0x04**: High humidity
-- **0x08**: Low humidity
-- **0x10**: Queen issue
-- **0x20**: Swarm risk
-- **0x40**: Low battery
-- **0x80**: SD error
-
-### Diagnostic Commands:
-
-#### Via Bluetooth:
-```
-Command: GET_STATUS
-Response: {
-  "device": "TopBar_A1_01",
-  "firmware": "v2.0",
-  "uptime": 345600,
-  "freeMemory": 1024,
-  "sdCard": true,
-  "btConnections": 5
+#### Daily Summary (JSON)
+```json
+{
+  "date": "2024-03-15",
+  "avgTemp": 27.3,
+  "avgHumidity": 63.8,
+  "alerts": 2,
+  "beeActivity": "Normal",
+  "queenDetected": true,
+  "riskLevel": 15
 }
 ```
 
-#### Device Self-Test:
-```
-Hold all 4 buttons for 5 seconds during startup:
-→ Runs comprehensive system test
-→ Shows results on display
-→ Logs results to diagnostics.log
-```
+## Smartphone App Development
 
----
+### Basic Connection (JavaScript/React Native)
+```javascript
+// Connect to hive monitor
+const device = await BluetoothSerial.connect(deviceId);
 
-## Field Deployment Guide
+// Request current data
+await device.write('GET_CURRENT_DATA');
+const response = await device.read();
+const data = JSON.parse(response);
 
-### Pre-Deployment Checklist:
-
-#### Device Preparation:
-- [ ] Battery fully charged (4.1V)
-- [ ] SD card inserted and formatted
-- [ ] Settings configured for local conditions
-- [ ] Bluetooth naming completed
-- [ ] Waterproof housing sealed
-- [ ] Mounting hardware ready
-
-#### Site Preparation:
-- [ ] Tree/location selected
-- [ ] Mounting position planned (avoid direct rain)
-- [ ] Access route for data collection planned
-- [ ] Local conditions documented
-- [ ] Backup power plan (solar/replacement battery)
-
-### Installation Steps:
-
-#### 1. Device Configuration:
-```
-Before deployment, configure:
-- Device Name: [Location]_[ID]
-- Beekeeper Name: [Local contact]
-- Location: [Tree/landmark description]
-- Alert thresholds for local climate
-- Bluetooth schedule (if using)
-```
-
-#### 2. Physical Installation:
-```
-Mounting Recommendations:
-- Height: 3-5 meters (above livestock/people)
-- Orientation: North-facing (shade, less sun heating)
-- Protection: Under branch/overhang if possible
-- Accessibility: Can be reached with ladder/pole
-- Security: Hidden from casual view
-```
-
-#### 3. Initial Testing:
-```
-Post-installation verification:
-1. Power on device
-2. Check sensor readings (reasonable values)
-3. Test Bluetooth range from ground
-4. Verify audio detection (tap hive)
-5. Confirm data logging starts
-6. Document GPS coordinates
-```
-
-### Maintenance Schedule:
-
-#### Weekly (Remote):
-- [ ] Bluetooth data collection
-- [ ] Check alert notifications
-- [ ] Verify system status
-
-#### Monthly (Physical):
-- [ ] Battery level check
-- [ ] Housing inspection (water, insects)
-- [ ] SD card space check
-- [ ] Cleaning (dust, spider webs)
-
-#### Quarterly (Detailed):
-- [ ] Battery replacement/charging
-- [ ] Sensor calibration check
-- [ ] Firmware update if available
-- [ ] Data archive and analysis
-
-### Data Collection Routes:
-
-#### Route Planning:
-```
-Efficient collection strategy:
-1. Group nearby hives (Bluetooth range overlap)
-2. Plan routes during scheduled hours
-3. Carry backup battery for phone
-4. Use vehicle with power inverter for laptop
-5. GPS app for navigation between sites
-```
-
-#### Collection Procedure:
-```
-Per-Hive Process (5 minutes each):
-1. Approach hive location
-2. Activate Bluetooth if manual mode
-3. Connect and download data
-4. Check device status/alerts  
-5. Visual hive inspection
-6. Document any issues
-7. Move to next hive
+// Display temperature
+console.log(`Hive temperature: ${data.temperature}°C`);
 ```
 
 ---
 
-## Battery Life Analysis
+# Alert System
 
-### Detailed Power Consumption:
+## Alert Types & Meanings
 
-#### Component Power Draw:
-- **MCU (Active)**: 8-15 mA
-- **MCU (Sleep)**: 0.5 μA
-- **Display (On)**: 8-12 mA
-- **Display (Off)**: 0 mA
-- **BME280 Sensor**: 0.5-2 mA (when active)
-- **Audio Sampling**: 3-5 mA
-- **Bluetooth (Advertising)**: 5-25 μA average
-- **Bluetooth (Connected)**: 8-15 mA
-- **SD Card Write**: 20-50 mA (brief)
+### 🌡️ **Temperature Alerts**
 
-#### Power Calculation Examples:
+#### TEMP_HIGH
+- **Trigger**: Temperature above configured maximum
+- **Typical**: > 35°C for African bees
+- **Meaning**: Risk of overheating, brood damage
+- **Action**: Provide shade, improve ventilation
 
-##### Normal Mode - Always On:
+#### TEMP_LOW  
+- **Trigger**: Temperature below configured minimum
+- **Typical**: < 18°C for African bees
+- **Meaning**: Risk of chilled brood, reduced activity
+- **Action**: Check insulation, windbreak, colony strength
+
+### 💧 **Humidity Alerts**
+
+#### HUMIDITY_HIGH
+- **Trigger**: Humidity above configured maximum  
+- **Typical**: > 80%
+- **Meaning**: Risk of moisture buildup, mold, fermentation
+- **Action**: Improve ventilation, check for leaks
+
+#### HUMIDITY_LOW
+- **Trigger**: Humidity below configured minimum
+- **Typical**: < 40%  
+- **Meaning**: Risk of dried nectar, stressed bees
+- **Action**: Provide water source, check ventilation
+
+### 👑 **Queen Alerts**
+
+#### QUEEN_ISSUE
+- **Trigger**: No queen frequencies detected for > 3 hours
+- **Meaning**: Queen may be missing, dead, or distressed
+- **Action**: URGENT - Inspect hive immediately, look for queen
+
+#### QUEEN_PRESENT
+- **Trigger**: Strong queen frequencies detected
+- **Meaning**: Queen actively laying, colony healthy
+- **Action**: Normal monitoring
+
+### 🐝 **Behavioral Alerts**
+
+#### SWARM_RISK
+- **Trigger**: High frequency activity (400-600 Hz) + high volume
+- **Meaning**: Colony preparing to swarm
+- **Action**: URGENT - Check for queen cells, add space, split hive
+
+#### DEFENSIVE
+- **Trigger**: Very high frequencies (> 600 Hz) + high volume
+- **Meaning**: Bees are agitated or defensive
+- **Action**: Approach with caution, check for disturbances
+
+#### STRESSED  
+- **Trigger**: Irregular patterns + high activity
+- **Meaning**: Colony under stress (disease, pests, hunger)
+- **Action**: Inspect for mites, disease signs, food stores
+
+### ⚡ **System Alerts**
+
+#### LOW_BATTERY
+- **Trigger**: Battery voltage < 3.5V
+- **Meaning**: System will shut down soon
+- **Action**: Charge battery or check solar panel
+
+#### SD_ERROR
+- **Trigger**: SD card write failure
+- **Meaning**: Data logging stopped
+- **Action**: Check SD card connection, replace if needed
+
+## Alert Responses
+
+### Immediate Actions (Critical Alerts)
+1. **SWARM_RISK**: Check within 2 hours
+2. **QUEEN_ISSUE**: Check within 4 hours  
+3. **TEMP_HIGH**: Provide cooling immediately
+
+### Daily Monitoring (Warning Alerts)
+1. **Temperature/Humidity**: Adjust on next visit
+2. **STRESSED**: Inspect thoroughly on next visit
+3. **DEFENSIVE**: Plan careful approach
+
+### System Maintenance (Info Alerts)
+1. **LOW_BATTERY**: Service on next visit
+2. **SD_ERROR**: Replace/check SD card
+
+## Alert History
+
+### Viewing Alert Log
 ```
-Components Active:
-- MCU: 12 mA
-- Display: 10 mA  
-- Sensors: 1 mA
-- Audio: 4 mA
-- Bluetooth: 0.015 mA (15 μA)
-- Total: ~27 mA average
-
-Battery Life:
-1200 mAh ÷ 27 mA = 44.4 hours = 44 days
-```
-
-##### Field Mode - Optimized:
-```
-Power Profile (24 hours):
-- Display On (30 min): 27 mA × 0.5h = 13.5 mAh
-- Display Off (23.5h): 17 mA × 23.5h = 399.5 mAh
-- Daily Total: 413 mAh
-
-Battery Life:
-1200 mAh ÷ 413 mAh = 2.9 days per 1%
-100% ÷ 2.9 = 34 days... Wait, let me recalculate:
-
-1200 mAh ÷ 413 mAh/day = 2.9 days
-That's wrong. Let me fix:
-
-1200 mAh ÷ (413 mAh ÷ 24h) = 1200 ÷ 17.2 = 69.8 hours = 69 days
-```
-
-##### Critical Mode - Emergency:
-```
-Power Profile:
-- Display rarely on: 2 mA average
-- Minimal Bluetooth: 0.5 mA average  
-- Reduced sensing: 8 mA total average
-
-Battery Life:
-1200 mAh ÷ 8 mA = 150 hours = 6.25 days... 
-Let me recalculate properly:
-
-8 mA = 8 mA × 24h = 192 mAh per day
-1200 mAh ÷ 192 mAh/day = 6.25 days
-
-That's still wrong for the long life claimed. Let me recalculate:
-
-Critical mode average: 1-2 mA
-1.5 mA × 24h = 36 mAh per day
-1200 mAh ÷ 36 mAh/day = 33 days
-
-For longer life, we need deep sleep:
-Active 5% of time: 8 mA × 0.05 = 0.4 mA
-Sleep 95% of time: 0.0005 mA × 0.95 = 0.0005 mA
-Average: 0.4005 mA = 9.6 mAh per day
-1200 mAh ÷ 9.6 mAh/day = 125 days
-```
-
-### Real-World Battery Performance:
-
-#### Test Results (1200mAh Battery):
-
-| Configuration | Lab Test | Field Test | Notes |
-|---------------|----------|------------|-------|
-| **Normal Mode (Always On)** | 42 days | 38 days | Display always on |
-| **Field Mode (5min timeout)** | 72 days | 68 days | Recommended setting |
-| **Scheduled BT (9AM-5PM)** | 65 days | 61 days | Business hours only |
-| **Manual BT Only** | 78 days | 74 days | Button activation only |
-| **Critical Mode** | 95 days | 89 days | Emergency operation |
-| **Deep Sleep Mode** | 125 days | 118 days | Minimal functionality |
-
-#### Field Conditions Impact:
-
-##### Temperature Effects on Battery Performance:
-⚠️ **IMPORTANT**: Temperature significantly affects lithium battery performance and longevity.
-
-- **Hot Weather (35-45°C)**: -10 to -20% battery life
-  - Battery degrades faster in heat
-  - Increased self-discharge rate
-  - Recommend shade/insulation for device
-- **Very Hot (>45°C)**: -25% battery life, potential damage
-- **Cold Weather (0-10°C)**: -15 to -25% battery life
-  - Reduced chemical reaction efficiency
-  - Temporarily lower voltage output
-  - Battery recovers when warmed
-- **Very Cold (<0°C)**: -30% or more, may cause shutdowns
-- **Optimal Range (20-30°C)**: Full rated performance
-- **Humidity >85%**: May cause corrosion, affecting battery contacts
-
-**Climate Considerations**:
-- **Highlands (1500m+)**: Cold nights may reduce overnight performance
-- **Coast/Lake regions**: High humidity requires weather protection
-- **Arid regions**: Extreme heat requires shading and ventilation
-- **Rainy seasons**: Ensure waterproof sealing to prevent moisture damage
-
-##### Usage Pattern Effects:
-- **High Bluetooth Usage**: -20% (daily connections)
-- **Frequent Alerts**: -5% (display activations)
-- **SD Card Issues**: +5% (no writing, emergency buffer)
-
-#### Optimization Recommendations:
-
-##### For Maximum Battery Life:
-```
-Configuration:
-- Power Mode: Critical
-- Bluetooth: Manual only
-- Display Timeout: 1 minute
-- Logging Interval: 30 minutes
-- Alert Thresholds: Relaxed
-
-Expected Life: 90-120 days
+Navigation: Main Screen → DOWN → Alerts Screen
 ```
 
-##### For Research/Frequent Access:
+### Alert Log Format (SD Card)
 ```
-Configuration:
-- Power Mode: Field
-- Bluetooth: Scheduled (9AM-5PM)
-- Display Timeout: 5 minutes
-- Logging Interval: 10 minutes
-- Alert Thresholds: Standard
-
-Expected Life: 60-80 days
-```
-
-##### For Emergency Backup:
-```
-Configuration:
-- Power Mode: Critical
-- Bluetooth: Off
-- Display Timeout: 30 seconds
-- Logging Interval: 60 minutes
-- Alerts: Critical only
-
-Expected Life: 100-140 days
-```
-
-### Battery Replacement Strategy:
-
-#### Field Deployment Schedule:
-```
-90-Day Rotation (Recommended):
-- Month 1-3: Primary battery
-- Month 3: Replace with charged battery
-- Month 3-6: Secondary battery  
-- Month 6: Replace with recharged primary
-- Repeat cycle
-```
-
-#### Solar Charging Option:
-```
-Small Solar Panel (5W):
-- Maintains charge in field mode
-- Eliminates battery replacement
-- Requires 6+ hours sunlight daily
-- Add weather protection
+DateTime,AlertType,Value
+2024-03-15 14:30:00,TEMP_HIGH,36.2
+2024-03-15 15:45:00,SWARM_RISK,N/A
+2024-03-15 16:20:00,QUEEN_ISSUE,N/A
 ```
 
 ---
 
-## Advanced Features
+# Firmware Updates
 
-### Emergency Data Recovery:
+## When to Update Firmware
 
-#### When SD Card Fails:
-```
-Emergency Buffer:
-- Stores last 20 readings in memory
-- Continues normal operation
-- Downloads via Bluetooth
-- Automatic flush when SD restored
+### Mandatory Updates
+- **Security fixes** for Bluetooth vulnerabilities
+- **Critical bug fixes** affecting data accuracy
+- **Hardware compatibility** updates
+
+### Recommended Updates  
+- **New features** for bee monitoring
+- **Performance improvements** for battery life
+- **Enhanced analysis** algorithms
+
+### Optional Updates
+- **User interface** improvements
+- **Additional data export** formats
+- **New alert types**
+
+## Update Methods
+
+### Method 1: DFU Mode (Device Firmware Update)
+
+#### Entering DFU Mode
+1. **Button Combination**: Hold UP + DOWN + SELECT for 3 seconds
+2. **Display Shows**: "FIRMWARE UPDATE - Connect via Bluetooth"
+3. **LED Behavior**: Rapid blue flashing (nRF52840 built-in LED)
+
+#### Using nRF Connect App (Recommended)
+1. **Download**: "nRF Connect for Mobile" (Nordic Semiconductor)
+2. **Enable DFU Mode** on device (above steps)
+3. **Open nRF Connect** and scan for devices
+4. **Look for**: "DfuTarg" or "Hive_DFU"
+5. **Connect** and select "DFU"
+6. **Choose Firmware File**: Select .zip file from download
+7. **Upload**: Wait for completion (2-3 minutes)
+8. **Automatic Restart**: Device will reboot with new firmware
+
+#### Using Computer (Advanced)
+```bash
+# Install nrfutil
+pip install nrfutil
+
+# Flash firmware
+nrfutil dfu usb-serial -pkg firmware.zip -p COM3
 ```
 
-#### Data Retrieval:
-```
-Bluetooth Command: GET_BUFFER
-Returns: Last 20 readings in JSON format
-Use when: SD card error detected
+### Method 2: Bluetooth OTA (Over-The-Air)
+
+#### Requirements
+- Custom smartphone app with OTA capability
+- Device in normal operation (not DFU mode)
+- Firmware file in .bin format
+
+#### Process
+1. **Enable Bluetooth** on device (Manual/Scheduled/Always On)
+2. **Connect** with OTA-capable app
+3. **Select Firmware** file from phone storage
+4. **Initiate Transfer** (may take 10-15 minutes)
+5. **Auto-restart** when complete
+
+### Method 3: Programming Header (Development)
+
+#### Hardware Requirements
+- **J-Link Programmer** or compatible
+- **SWD Connection**: SWCLK, SWDIO, VCC, GND pins
+- **PlatformIO** or **Arduino IDE** with nRF52 support
+
+#### Development Upload
+```bash
+# Using PlatformIO
+pio run -t upload
+
+# Using nrfjprog
+nrfjprog --program firmware.hex --chiperase --verify --reset
 ```
 
-### Factory Reset Procedure:
+## Firmware Files
+
+### File Types
+- **.zip**: DFU package (recommended for nRF Connect)
+- **.hex**: Intel HEX format (for programmers)
+- **.bin**: Binary format (for OTA updates)
+
+### Version Information
 ```
-When Needed:
+Current Version: 2.1.0
+Release Date: March 2024
+Git Hash: abc123def456
+Build: Release
+Target: nRF52840
+```
+
+### Checking Current Version
+```
+Navigation: SELECT → Settings → System → About
+or
+Boot Screen: Shows version for 3 seconds
+```
+
+## Backup Before Update
+
+### Settings Backup
+1. **Bluetooth Export**: Connect and download current settings
+2. **SD Card**: Copy settings_export.txt file
+3. **Photo**: Take pictures of current settings screens
+
+### Data Backup
+1. **Copy All CSV Files** from SD card
+2. **Export Bluetooth Data** if needed
+3. **Note Custom Configurations** (thresholds, names, etc.)
+
+## Recovery Procedures
+
+### Soft Recovery (Settings Lost)
+1. **Check Version**: Verify update completed
+2. **Reconfigure**: Re-enter settings from backup
+3. **Test Functions**: Verify all sensors working
+4. **Restore Data**: Copy CSV files back if needed
+
+### Hard Recovery (Boot Failure)
+1. **Force DFU Mode**: Hold all buttons while powering on
+2. **Re-flash Firmware**: Use nRF Connect with known good firmware
+3. **Factory Reset**: Use SELECT + BACK combination
+4. **Complete Reconfiguration**: Start from initial setup
+
+### Emergency Recovery (Brick Recovery)
+1. **Hardware Programmer Required**: J-Link or compatible
+2. **SWD Connection**: Direct programming pins
+3. **Erase and Reflash**: Complete firmware restoration
+4. **Contact Support**: If still not working
+
+---
+
+# Troubleshooting
+
+## Common Issues
+
+### Display Problems
+
+#### Blank Screen
+**Symptoms**: No display output, backlight may be on
+**Causes**: 
+- I2C connection failure
+- Power supply issue
+- Display module failure
+
+**Solutions**:
+1. Check I2C wiring (SDA, SCL, VCC, GND)
+2. Verify 3.3V power supply
+3. Try different I2C address (0x3C or 0x3D)
+4. Replace display module
+
+#### Garbled Display
+**Symptoms**: Corrupted text, missing pixels, artifacts
+**Causes**:
+- Loose I2C connections
+- Electromagnetic interference
+- Power supply noise
+
+**Solutions**:
+1. Secure all connections
+2. Add I2C pull-up resistors (4.7kΩ)
+3. Check power supply filtering
+4. Move away from interference sources
+
+### Sensor Issues
+
+#### Temperature Reading Errors
+**Symptoms**: Readings of -999°C, NaN, or clearly wrong values
+**Causes**:
+- BME280 connection failure
+- Sensor damage
+- I2C address conflict
+
+**Solutions**:
+1. Check BME280 wiring and connections
+2. Verify I2C address (0x77 or 0x76)
+3. Test with known good sensor
+4. Check for I2C bus conflicts
+
+#### Audio Not Working
+**Symptoms**: Sound level always 0%, no frequency detection
+**Causes**:
+- MAX9814 connection issue
+- Analog input configuration
+- Microphone placement
+
+**Solutions**:
+1. Verify MAX9814 wiring (VCC, GND, OUT to A4)
+2. Check analog input configuration
+3. Test with known sound source
+4. Adjust sensitivity settings
+
+### SD Card Problems
+
+#### Card Not Detected
+**Symptoms**: "SD: NOT FOUND" message at startup
+**Causes**:
+- SPI wiring incorrect
+- Card not inserted properly
+- Incompatible card format
+- Power supply insufficient
+
+**Solutions**:
+1. Check SPI connections (MOSI, MISO, SCK, CS)
+2. Reseat SD card firmly
+3. Format card as FAT32
+4. Try different SD card (≤32GB recommended)
+5. Check 3.3V power supply capacity
+
+#### Data Logging Stopped
+**Symptoms**: No new data in CSV files, "SD_ERROR" alert
+**Causes**:
+- Card full
+- Card corrupted
+- File system errors
+- Card ejected while writing
+
+**Solutions**:
+1. Check available space on card
+2. Run disk check/repair on computer
+3. Backup data and reformat card
+4. Replace with new SD card
+
+### Bluetooth Issues
+
+#### Device Not Discoverable
+**Symptoms**: Cannot find device when scanning
+**Causes**:
+- Bluetooth disabled or in wrong mode
+- Device in sleep mode
+- Bluetooth stack failure
+- Range/interference issues
+
+**Solutions**:
+1. Check Bluetooth mode in settings
+2. Activate manual mode with button press
+3. Move closer to device (< 10 meters)
+4. Restart device (power cycle)
+5. Clear Bluetooth cache on phone
+
+#### Connection Drops
+**Symptoms**: Connects then immediately disconnects
+**Causes**:
+- Low battery
+- Bluetooth interference
+- App compatibility issues
+- Firmware bugs
+
+**Solutions**:
+1. Charge battery (>3.7V recommended)
+2. Move away from WiFi/interference sources
+3. Try different connection app
+4. Update device firmware
+
+### Power Issues
+
+#### Short Battery Life
+**Symptoms**: Battery drains faster than expected
+**Causes**:
+- Display always on
+- Not in field mode
+- Bluetooth always active
+- Hardware fault
+
+**Solutions**:
+1. Enable field mode for extended operation
+2. Set Bluetooth to manual mode
+3. Reduce display brightness
+4. Check for short circuits
+5. Replace old/damaged battery
+
+#### Won't Charge
+**Symptoms**: Battery percentage not increasing
+**Causes**:
+- Charging circuit failure
+- Bad USB cable
+- Battery at end of life
+- Temperature too extreme
+
+**Solutions**:
+1. Try different USB cable
+2. Check charging LED indicator
+3. Allow battery to warm/cool to room temperature
+4. Replace battery if >2 years old
+
+### Real-Time Clock Issues
+
+#### Wrong Time After Power Loss
+**Symptoms**: Time resets when battery removed
+**Causes**:
+- RTC backup battery dead
+- RTC module failure
+- Power supply issue
+
+**Solutions**:
+1. Replace CR2032 battery in RTC module
+2. Check RTC module connections
+3. Set time after every power cycle
+4. Replace RTC module
+
+## Diagnostic Procedures
+
+### System Health Check
+```
+Navigation: Power on → Observe startup diagnostics
+Expected output:
+- RTC: OK
+- BME280: OK  
+- Audio: OK
+- Buttons: OK
+- SD Card: OK or NOT FOUND
+- System: READY
+```
+
+### Sensor Test
+```
+Navigation: SELECT → Settings → Run Diagnostics (if available)
+or
+Observe Dashboard for reasonable values:
+- Temperature: Environmental range (0-50°C)
+- Humidity: 20-90%
+- Pressure: 950-1050 hPa
+- Battery: >3.0V
+```
+
+### Audio Test
+```
+Method 1: Speak near microphone, observe sound level changes
+Method 2: Tap hive gently, watch for activity spikes
+Method 3: Navigation → Sound Monitor screen
+Expected: Sound level responds to noise
+```
+
+### Bluetooth Test
+```
+Method 1: Enable manual mode, scan with phone
+Method 2: Check device name in settings matches scan results
+Method 3: Attempt connection with nRF Connect app
+```
+
+## Factory Reset
+
+### When to Factory Reset
 - Settings corrupted
-- Unknown configuration  
-- Preparing for new deployment
-- Troubleshooting last resort
+- Unknown configuration problems
+- Preparing device for new installation
+- Troubleshooting persistent issues
 
-Procedure:
-1. Hold SELECT + BACK for 5 seconds
-2. Confirm on screen: DOWN button
-3. All settings reset to defaults
-4. Restart device
-5. Reconfigure for deployment
+### Reset Procedure
+1. **Button Combination**: Hold SELECT + BACK for 5 seconds
+2. **Confirmation Screen**: Use UP to cancel, DOWN to confirm
+3. **Reset Progress**: Wait for completion (30 seconds)
+4. **Automatic Restart**: Device reboots with defaults
+5. **Reconfiguration**: Go through initial setup again
+
+### What Gets Reset
+- All user settings to factory defaults
+- Bluetooth device name and configuration
+- Alert thresholds
+- Display preferences
+- Calibration offsets
+
+### What Remains
+- Stored data files on SD card
+- Hardware configuration
+- Firmware version
+- Serial number/hardware ID
+
+---
+
+# Maintenance
+
+## Regular Maintenance Schedule
+
+### Weekly (Active Season)
+- **Visual Inspection**: Check for physical damage
+- **Battery Check**: Verify charge level >50%
+- **Data Review**: Check for unusual patterns or alerts
+- **Solar Panel**: Clean surface if dusty/dirty
+
+### Monthly
+- **Deep Clean**: Remove housing, clean all surfaces
+- **Connection Check**: Verify all connectors secure
+- **Sensor Calibration**: Compare readings to known values
+- **SD Card**: Check available space, backup data
+
+### Seasonal
+- **Battery Replacement**: Replace Li-Po if >2 years old
+- **Firmware Update**: Check for and install updates
+- **Full Calibration**: Complete sensor recalibration
+- **Documentation**: Update hive records and configurations
+
+### Annual
+- **Component Replacement**: Replace wear items (SD card, RTC battery)
+- **Enclosure Service**: Check seals, replace if needed
+- **System Upgrade**: Evaluate new features/hardware
+- **Data Archive**: Long-term storage of historical data
+
+## Cleaning Procedures
+
+### External Cleaning
+1. **Power Off**: Remove battery before cleaning
+2. **Dry Brush**: Remove debris with soft brush
+3. **Damp Cloth**: Clean housing with slightly damp cloth
+4. **Dry Completely**: Ensure no moisture before reassembly
+5. **Solar Panel**: Use glass cleaner for optimal efficiency
+
+### Internal Cleaning
+1. **Compressed Air**: Blow out dust from PCB and connectors
+2. **Alcohol Wipes**: Clean circuit board with isopropyl alcohol
+3. **Contact Cleaner**: Spray connectors if oxidation present
+4. **Dry Time**: Allow 30 minutes drying before reassembly
+
+### Sensor Maintenance
+- **BME280**: No user maintenance required
+- **Microphone**: Keep mesh clean, replace if damaged
+- **Display**: Clean with microfiber cloth only
+- **Buttons**: Clean contacts if response poor
+
+## Replacement Parts
+
+### Consumable Items
+| Part | Typical Life | Replacement Interval |
+|------|-------------|---------------------|
+| Li-Po Battery | 2-3 years | When capacity <70% |
+| SD Card | 3-5 years | When errors occur |
+| RTC Battery | 5-10 years | When time resets |
+| Enclosure Seals | 2-3 years | When cracked/hard |
+
+### Electronic Components
+| Part | Failure Rate | Replacement Cost |
+|------|-------------|------------------|
+| BME280 Sensor | Low | $10-15 |
+| MAX9814 Mic | Low | $5-10 |
+| OLED Display | Medium | $15-25 |
+| nRF52840 Board | Very Low | $25-35 |
+
+### Upgrade Opportunities
+- **Larger Battery**: 2500mAh for longer field operation
+- **Bigger Solar Panel**: 2W for faster charging
+- **Weather Station**: Add wind/rain sensors
+- **Cellular Module**: Remote data transmission
+- **GPS Module**: Location tracking for mobile hives
+
+## Data Management
+
+### File Organization
+```
+SD Card Structure:
+/HIVE_DATA/
+  /2024/
+    2024-01.CSV    (January data)
+    2024-02.CSV    (February data)
+    ...
+/alerts.log        (Alert history)
+/settings_export.txt (Settings backup)
+/field_events.csv   (Manual event log)
 ```
 
-### Firmware Updates:
-```
-Future updates available via:
-1. Bluetooth firmware transfer
-2. SD card update files
-3. USB connection (development)
+### Backup Strategy
+1. **Monthly Download**: Retrieve all new data files
+2. **Cloud Storage**: Upload to Google Drive/Dropbox
+3. **Local Backup**: Keep copies on computer
+4. **Version Control**: Track firmware and setting changes
 
-Check for updates:
-- Device info shows current version
-- Contact support for latest firmware
+### Data Retention
+- **Device Storage**: 1-2 years typical SD card capacity
+- **Cloud Backup**: Unlimited (recommend permanent)
+- **Local Analysis**: Keep 5+ years for trend analysis
+- **Research Data**: Archive indefinitely for scientific value
+
+---
+
+# Data Analysis
+
+## Understanding Your Data
+
+### CSV File Format
+```csv
+DateTime,UnixTime,Temp_C,Humidity_%,Pressure_hPa,Sound_Hz,Sound_Level,Bee_State,Battery_V,Alerts
+2024-03-15 10:00:00,1710504000,28.5,65.2,1013.2,285,45,NORMAL,3.85,0x00
+2024-03-15 10:10:00,1710504600,28.7,64.8,1013.1,292,48,NORMAL,3.85,0x00
 ```
 
-### Multi-Device Management:
+### Key Metrics
+
+#### Temperature Analysis
+- **Daily Range**: Should be 5-10°C difference day/night
+- **Seasonal Trends**: Track adaptation to weather changes
+- **Brood Area**: Stable 32-35°C indicates healthy brood rearing
+- **Alerts**: Frequent temperature alerts suggest ventilation issues
+
+#### Humidity Patterns
+- **Morning Peak**: Often highest just after dawn
+- **Afternoon Low**: Typically lowest mid-afternoon
+- **Seasonal Variation**: Higher during rainy season
+- **Colony Strength**: Strong colonies maintain stable humidity
+
+#### Sound Analysis
+- **Baseline Activity**: Establish normal patterns for your hive
+- **Daily Cycle**: Typically highest 10AM-4PM
+- **Frequency Trends**: Queen frequencies (200-350Hz) indicate health
+- **Volume Changes**: Sudden increases may indicate disturbance
+
+### Analysis Tools
+
+#### Spreadsheet Analysis (Excel/Google Sheets)
+```excel
+=AVERAGE(C2:C100)          // Average temperature
+=MAX(C2:C100)-MIN(C2:C100) // Daily temperature range
+=COUNTIF(I2:I100,"!=0x00") // Count of alert events
 ```
-For managing multiple hives:
-1. Use consistent naming convention
-2. Create device inventory spreadsheet
-3. GPS coordinate tracking
-4. Battery replacement schedule
-5. Data collection routes
-6. Alert notification system
+
+#### Python Analysis
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load data
+df = pd.read_csv('2024-03.CSV')
+df['DateTime'] = pd.to_datetime(df['DateTime'])
+
+# Plot temperature trends
+plt.figure(figsize=(12,6))
+plt.plot(df['DateTime'], df['Temp_C'])
+plt.title('Hive Temperature Over Time')
+plt.ylabel('Temperature (°C)')
+plt.xlabel('Date')
+plt.show()
+
+# Calculate daily statistics
+daily_stats = df.groupby(df['DateTime'].dt.date).agg({
+    'Temp_C': ['mean', 'min', 'max'],
+    'Humidity_%': ['mean', 'min', 'max'],
+    'Sound_Level': 'mean'
+})
+```
+
+#### R Analysis
+```r
+library(ggplot2)
+library(dplyr)
+
+# Load and prepare data
+hive_data <- read.csv("2024-03.CSV")
+hive_data$DateTime <- as.POSIXct(hive_data$DateTime)
+
+# Create activity heatmap
+ggplot(hive_data, aes(x=hour(DateTime), y=day(DateTime), fill=Sound_Level)) +
+  geom_tile() +
+  scale_fill_gradient(low="blue", high="red") +
+  labs(title="Hive Activity Heatmap", x="Hour of Day", y="Day of Month")
+```
+
+## Pattern Recognition
+
+### Normal Patterns
+- **Daily Temperature**: Gradual rise/fall following ambient
+- **Activity Cycle**: Peak activity 10AM-4PM, quiet at night
+- **Weather Response**: Activity drops before storms
+- **Seasonal Changes**: Gradual adaptation to climate shifts
+
+### Warning Patterns
+- **Erratic Temperature**: Wild swings indicate ventilation issues
+- **Night Activity**: Unusual activity at night suggests problems
+- **Frequency Shifts**: Changes in dominant frequency patterns
+- **Silent Periods**: Extended periods of low activity
+
+### Critical Patterns
+- **Temperature Spikes**: Sudden increases >40°C
+- **Activity Explosion**: Sudden high activity + high frequency
+- **Complete Silence**: No activity during normal hours
+- **Frequency Absence**: Missing queen frequencies >6 hours
+
+## Actionable Insights
+
+### Immediate Actions (Same Day)
+- **Swarm Indicators**: High frequency + high volume + temperature spike
+- **Queen Loss**: Absence of 200-350Hz frequencies for >3 hours
+- **Overheating**: Temperature >38°C with high humidity
+- **Predator Attack**: Sudden activity spike with defensive frequencies
+
+### Short-term Actions (Within Week)
+- **Gradual Temperature Rise**: Trending toward dangerous levels
+- **Decreasing Activity**: Steady decline over several days
+- **Humidity Issues**: Persistent high/low humidity readings
+- **Power Problems**: Declining battery levels
+
+### Long-term Actions (Seasonal)
+- **Climate Adaptation**: Preparing for seasonal changes
+- **Equipment Upgrade**: Based on performance patterns
+- **Hive Management**: Optimizing location/configuration
+- **Research Insights**: Contributing to bee behavior studies
+
+---
+
+# Advanced Features
+
+## Custom Threshold Configuration
+
+### Adaptive Thresholds
+Instead of fixed thresholds, configure adaptive ranges based on:
+- **Seasonal Variations**: Different limits for wet/dry seasons
+- **Colony Strength**: Adjust based on hive population
+- **Local Climate**: Customize for your specific microclimate
+- **Bee Race**: Optimize for African vs European bee characteristics
+
+### Time-Based Thresholds
+```
+Example Configuration:
+Night (22:00-06:00): Temperature 15-30°C, Low activity expected
+Day (06:00-18:00): Temperature 18-35°C, Normal activity
+Evening (18:00-22:00): Temperature 16-33°C, Reduced activity
+```
+
+## Multi-Hive Management
+
+### Device Naming Strategy
+```
+Naming Convention: [Location]_[HiveType]_[Number]
+Examples:
+- NORTH_FIELD_01, NORTH_FIELD_02 (Multiple hives in north field)
+- TREE_A_01 (Single hive at Tree A)
+- VILLAGE_COOP_01 (Cooperative hive in village)
+```
+
+### Data Correlation
+- **Comparative Analysis**: Compare performance across hives
+- **Environmental Impact**: How location affects hive health
+- **Management Effectiveness**: Which interventions work best
+- **Early Warning**: Use healthy hives to predict problems
+
+### Centralized Monitoring
+- **Bluetooth Scanning**: Walk route to collect from multiple devices
+- **Data Aggregation**: Combine data from all hives
+- **Alert Prioritization**: Which hives need attention first
+- **Resource Planning**: Optimize intervention timing
+
+## Research Applications
+
+### Citizen Science
+Your data can contribute to:
+- **Climate Change Studies**: How warming affects bee behavior
+- **Colony Collapse Research**: Early warning indicators
+- **Pollination Studies**: Activity patterns vs crop flowering
+- **Conservation Efforts**: Wild vs managed hive comparisons
+
+### Data Sharing Protocols
+- **Anonymization**: Remove location data if needed
+- **Standard Formats**: Export in research-compatible formats
+- **Metadata**: Include hive management practices
+- **Consent**: Understand data usage before sharing
+
+## Integration Possibilities
+
+### Weather Station Integration
+Add external sensors for:
+- **Wind Speed/Direction**: Affects foraging patterns
+- **Rainfall Measurement**: Correlates with hive activity
+- **Light Levels**: Track day length effects
+- **Barometric Pressure**: Predict weather changes
+
+### Smart Hive Features
+- **Automated Ventilation**: Servo-controlled vents based on temperature
+- **Feeding Alerts**: Weight sensors to detect food shortage
+- **Security Monitoring**: Motion sensors for theft prevention
+- **Remote Cameras**: Visual monitoring capability
+
+### Agricultural Integration
+- **Crop Monitoring**: Coordinate with farming activities
+- **Pesticide Alerts**: Warn before harmful applications
+- **Pollination Optimization**: Track hive service efficiency
+- **Yield Correlation**: Link bee activity to crop success
+
+## Customization Options
+
+### Hardware Modifications
+- **Extended Battery**: 5000mAh for month-long operation
+- **Solar Upgrade**: 5W panel for faster charging
+- **Weatherproofing**: IP67 rating for extreme conditions
+- **Remote Antenna**: Extend Bluetooth range
+
+### Software Customization
+- **Alert Thresholds**: Fine-tune for your specific needs
+- **Data Logging**: Adjust intervals and parameters
+- **Display Themes**: Customize information display
+- **Language Support**: Add local language translations
+
+### Advanced Analytics
+- **Machine Learning**: Pattern recognition for anomaly detection
+- **Predictive Modeling**: Forecast problems before they occur
+- **Behavioral Analysis**: Deep dive into bee behavior patterns
+- **Performance Optimization**: Tune system for your environment
+
+---
+
+# Appendices
+
+## Appendix A: Specifications
+
+### Electronic Specifications
+- **Microcontroller**: nRF52840 (64MHz ARM Cortex M4)
+- **RAM**: 256KB
+- **Flash**: 1MB
+- **Bluetooth**: 5.0 with long range support
+- **Operating Temperature**: -20°C to +60°C
+- **Storage Temperature**: -40°C to +85°C
+
+### Sensor Specifications
+- **Temperature**: ±1°C accuracy, -40°C to +85°C range
+- **Humidity**: ±3% accuracy, 0-100% range
+- **Pressure**: ±1hPa accuracy, 300-1100hPa range
+- **Audio**: 20Hz-20kHz frequency response, AGC enabled
+
+### Power Specifications
+- **Battery**: 3.7V Li-Po, 1200-5000mAh capacity
+- **Solar Panel**: 5V, 1-5W capacity
+- **Consumption (Testing)**: ~15mA average
+- **Consumption (Field)**: ~0.5mA average
+- **Charging Current**: 500mA maximum
+
+## Appendix B: Pin Configuration
+
+### nRF52840 Pin Assignments
+```
+Digital Pins:
+- Pin 10: SD Card CS (Chip Select)
+- Pin A0: Button UP
+- Pin A1: Button DOWN  
+- Pin A2: Button SELECT
+- Pin A3: Button BACK
+- Pin A4: Audio Input (MAX9814)
+- Pin A6: Battery Voltage Monitor
+
+I2C Bus:
+- SDA: BME280, OLED, RTC
+- SCL: BME280, OLED, RTC
+
+SPI Bus:
+- MOSI: SD Card Data Out
+- MISO: SD Card Data In
+- SCK: SD Card Clock
+```
+
+## Appendix C: Troubleshooting Codes
+
+### Error Codes
+```
+E001: RTC initialization failed
+E002: BME280 sensor not found
+E003: SD card initialization failed
+E004: Display initialization failed
+E005: Audio initialization failed
+E006: Settings corruption detected
+E007: Bluetooth initialization failed
+E008: Battery critically low
+E009: Temperature sensor timeout
+E010: SD card write error
+```
+
+### Status Codes
+```
+S001: System ready, all sensors operational
+S002: Field mode active, display timeout enabled
+S003: Bluetooth advertising active
+S004: Data logging active
+S005: Alert conditions present
+S006: Battery charging detected
+S007: Emergency buffer mode (SD unavailable)
+S008: Low power mode active
+S009: Diagnostic mode active
+S010: Firmware update mode
+```
+
+## Appendix D: Default Settings
+
+### Factory Default Values
+```
+Temperature Offset: 0.0°C
+Humidity Offset: 0.0%
+Audio Sensitivity: 5
+Queen Frequency Min: 200 Hz
+Queen Frequency Max: 350 Hz
+Swarm Frequency Min: 400 Hz
+Swarm Frequency Max: 600 Hz
+Stress Threshold: 70%
+Log Interval: 10 minutes
+Log Enabled: true
+Temp Min Alert: 18.0°C
+Temp Max Alert: 35.0°C
+Humidity Min Alert: 40.0%
+Humidity Max Alert: 80.0%
+Display Brightness: 7
+Field Mode: false
+Display Timeout: 5 minutes
+Bluetooth Mode: Manual
+Manual Timeout: 30 minutes
+Schedule Start: 7 (7 AM)
+Schedule End: 18 (6 PM)
+Device ID: 1
+Hive Name: "Hive_01"
+Location: "Unknown"
+Beekeeper: "User"
+```
+
+## Appendix E: File Formats
+
+### CSV Data Format
+```
+Field Name,Data Type,Description,Example
+DateTime,String,ISO format timestamp,"2024-03-15 10:00:00"
+UnixTime,Integer,Seconds since epoch,1710504000
+Temp_C,Float,Temperature in Celsius,28.5
+Humidity_%,Float,Relative humidity percent,65.2
+Pressure_hPa,Float,Atmospheric pressure,1013.2
+Sound_Hz,Integer,Dominant frequency,285
+Sound_Level,Integer,Sound level 0-100%,45
+Bee_State,String,Classified bee state,"NORMAL"
+Battery_V,Float,Battery voltage,3.85
+Alerts,Hex,Alert bitmask,"0x00"
+```
+
+### Settings Export Format
+```ini
+[Sensor_Calibration]
+TempOffset=0.0
+HumidityOffset=0.0
+
+[Audio_Settings]
+AudioSensitivity=5
+QueenFreqMin=200
+QueenFreqMax=350
+SwarmFreqMin=400
+SwarmFreqMax=600
+StressThreshold=70
+
+[Logging]
+LogInterval=10
+LogEnabled=true
+
+[Alert_Thresholds]
+TempMin=18.0
+TempMax=35.0
+HumidityMin=40.0
+HumidityMax=80.0
+
+[System]
+DisplayBrightness=7
+FieldModeEnabled=false
+DisplayTimeoutMin=5
+
+[Bluetooth]
+Mode=1
+ManualTimeoutMin=30
+ScheduleStartHour=7
+ScheduleEndHour=18
+DeviceId=1
+HiveName=Hive_01
+Location=Unknown
+Beekeeper=User
 ```
 
 ---
 
-## Conclusion
+**Document Version**: 2.1.0  
+**Last Updated**: July 2025 
+**Compatible Firmware**: 2.1.x  
+**Author**: Tanzania Hive Monitor Development Team  
+**License**: Creative Commons Attribution-ShareAlike 4.0 International
 
-The Hive Guard v2.0 represents a comprehensive solution for modern beekeeping in challenging field environments. Its combination of environmental monitoring, bee behavior analysis, and power-efficient design makes it ideal for diverse beekeeping operations.
-
-### Key Success Factors:
-- **Proper initial configuration** for local conditions
-- **Regular data collection** and analysis
-- **Proactive maintenance** and battery management
-- **Understanding of bee behavior patterns**
-- **Effective use of power management features**
-
-### Support and Resources:
-- **Technical Support**: [Contact Information]
-- **User Community**: [Forum/WhatsApp Group]
-- **Data Analysis Tools**: [Web Dashboard URL]
-- **Spare Parts**: [Supplier Information]
-
-This manual provides the foundation for successful deployment and operation of the Hive Guard system. Regular reference to the troubleshooting and optimization sections will ensure maximum benefit from this advanced monitoring technology.
+For technical support, latest firmware, and community discussions, visit:
+- **GitHub Repository**: [Link to repository]
+- **User Forum**: [Link to forum]
+- **Email Support**: [support email]
 
 ---
 
-**Document Version**: 2.0  
-**Last Updated**: December 2024  
-**Next Review**: March 2025
+*This manual is a living document. Please check for updates regularly and contribute improvements based on your field experience.*
