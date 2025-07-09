@@ -68,7 +68,7 @@ The Tanzania Hive Monitor is a solar-powered electronic system that continuously
 - **BME280 Sensor** (temperature, humidity, pressure)
 - **MAX9814 Microphone** (audio monitoring)
 - **128x64 OLED Display** (user interface)
-- **DS3231 RTC Module** (real-time clock)
+- **PCF8523 RTC Module** (real-time clock)
 - **MicroSD Card Module** (data storage)
 - **4 Tactile Buttons** (navigation)
 
