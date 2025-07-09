@@ -16,7 +16,7 @@ using SDFile = SDLib::File;
 // FILE MANAGEMENT
 // =============================================================================
 
-void createLogFile(RTC_DS3231& rtc, SystemStatus& status) {
+void createLogFile(RTC_PCF8523& rtc, SystemStatus& status) {
     if (!status.sdWorking || !status.rtcWorking) return;
     
     // Create directory structure for monthly files
@@ -37,9 +37,17 @@ void createLogFile(RTC_DS3231& rtc, SystemStatus& status) {
 // DATA LOGGING
 // =============================================================================
 
-void logData(SensorData& data, RTC_DS3231& rtc, SystemSettings& settings, 
+void logData(SensorData& data, RTC_PCF8523& rtc, SystemSettings& settings, 
              SystemStatus& status) {
+    
+    // Early exit if RTC not working
     if (!status.rtcWorking) return;
+    
+    // Check RTC health before logging
+    if (!checkPCF8523Health(rtc)) {
+        Serial.println(F("RTC health check failed - data may have incorrect timestamps"));
+        // Continue logging but mark as suspect - could add a flag to data
+    }
     
     // Try normal SD logging first
     if (status.sdWorking) {
@@ -74,11 +82,17 @@ void logData(SensorData& data, RTC_DS3231& rtc, SystemSettings& settings,
         storeInBuffer(data);
     }
 }
+
 // =============================================================================
 // EMERGENCY DATA BUFFERING
 // =============================================================================
 
 static DataBuffer emergencyBuffer = {{}, 0, 0, false};
+
+
+bool hasBufferedData() {
+    return emergencyBuffer.count > 0;
+}
 
 void storeInBuffer(const SensorData& data) {
     emergencyBuffer.readings[emergencyBuffer.writeIndex] = data;
@@ -95,7 +109,7 @@ void storeInBuffer(const SensorData& data) {
     Serial.println(F("/20)"));
 }
 
-void flushBufferedData(RTC_DS3231& rtc, SystemSettings& settings, SystemStatus& status) {
+void flushBufferedData(RTC_PCF8523& rtc, SystemSettings& settings, SystemStatus& status) {
     Serial.print(F("Flushing "));
     Serial.print(emergencyBuffer.count);
     Serial.println(F(" buffered readings..."));
@@ -103,26 +117,38 @@ void flushBufferedData(RTC_DS3231& rtc, SystemSettings& settings, SystemStatus& 
     uint8_t startIndex = emergencyBuffer.full ? emergencyBuffer.writeIndex : 0;
     uint8_t itemsToFlush = emergencyBuffer.count;
     
+    // Clear buffer FIRST to prevent recursion
+    emergencyBuffer.count = 0;
+    emergencyBuffer.writeIndex = 0;
+    emergencyBuffer.full = false;
+    
     for (uint8_t i = 0; i < itemsToFlush; i++) {
         uint8_t index = (startIndex + i) % 20;
         
-        // Log each buffered reading
-        logData(emergencyBuffer.readings[index], rtc, settings, status);
+        // Write directly to SD without calling logData() to avoid recursion
+        if (status.sdWorking && status.rtcWorking) {
+            DateTime now = rtc.now();
+            char filename[30];
+            sprintf(filename, "/HIVE_DATA/%04d/%04d-%02d.CSV", 
+                    now.year(), now.year(), now.month());
+            
+            bool fileExists = SD.exists(filename);
+            SDFile dataFile = SD.open(filename, FILE_WRITE);
+            
+            if (dataFile) {
+                if (!fileExists) {
+                    writeLogHeader(dataFile, now, settings);
+                }
+                writeLogEntry(dataFile, now, emergencyBuffer.readings[index]);
+                dataFile.close();
+            }
+        }
         
         // Small delay to avoid overwhelming SD card
         delay(10);
     }
     
-    // Clear buffer after successful flush
-    emergencyBuffer.count = 0;
-    emergencyBuffer.writeIndex = 0;
-    emergencyBuffer.full = false;
-    
     Serial.println(F("Buffer flush complete"));
-}
-
-bool hasBufferedData() {
-    return emergencyBuffer.count > 0;
 }
 // =============================================================================
 // LOG FILE WRITING
@@ -265,7 +291,7 @@ int countFilesInDirectory(const char* dirPath) {
 // DATA EXPORT
 // =============================================================================
 
-void exportDataSummary(RTC_DS3231& rtc, SystemStatus& status) {
+void exportDataSummary(RTC_PCF8523& rtc, SystemStatus& status) {
     if (!status.sdWorking || !status.rtcWorking) return;
     
     DateTime now = rtc.now();
@@ -279,7 +305,7 @@ void exportDataSummary(RTC_DS3231& rtc, SystemStatus& status) {
         
         // Scan through years
         for (int year = 2024; year <= now.year(); year++) {
-            char yearPath[20];
+            char yearPath[25];
             sprintf(yearPath, "/HIVE_DATA/%04d", year);
             
             if (SD.exists(yearPath)) {
@@ -419,7 +445,7 @@ void logDiagnostics(SystemStatus& status, SystemSettings& settings) {
 // =============================================================================
 
 
-void logFieldEvent(uint8_t eventType, RTC_DS3231& rtc, SystemStatus& status) {
+void logFieldEvent(uint8_t eventType, RTC_PCF8523& rtc, SystemStatus& status) {
     if (!status.sdWorking || !status.rtcWorking) return;
     
     DateTime now = rtc.now();

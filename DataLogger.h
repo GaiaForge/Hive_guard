@@ -23,19 +23,19 @@ struct DataBuffer {
 
 
 // Function declarations
-void createLogFile(RTC_DS3231& rtc, SystemStatus& status);
-void logData(SensorData& data, RTC_DS3231& rtc, SystemSettings& settings, 
+void createLogFile(RTC_PCF8523& rtc, SystemStatus& status);
+void logData(SensorData& data, RTC_PCF8523& rtc, SystemSettings& settings, 
              SystemStatus& status);
 void writeLogHeader(SDFile& file, DateTime& now, SystemSettings& settings);
 void writeLogEntry(SDFile& file, DateTime& now, SensorData& data);
 void checkAndCleanOldData(DateTime now);
 int countFilesInDirectory(const char* dirPath);
-void exportDataSummary(RTC_DS3231& rtc, SystemStatus& status);
+void exportDataSummary(RTC_PCF8523& rtc, SystemStatus& status);
 void checkSDCardAtStartup(Adafruit_SH1106G& display, SystemStatus& status);
 void checkSDCard(SystemStatus& status);
 void logDiagnostics(SystemStatus& status, SystemSettings& settings);
-
-void logFieldEvent(uint8_t eventType, RTC_DS3231& rtc, SystemStatus& status);
+bool checkPCF8523Health(RTC_PCF8523& rtc);
+void logFieldEvent(uint8_t eventType, RTC_PCF8523& rtc, SystemStatus& status);
 void generateDailyReport(DateTime date, SensorData& avgData, DailyPattern& pattern,
                         AbscondingIndicators& risk, SystemStatus& status);
 void generateAlertMessage(char* buffer, size_t bufferSize, 
@@ -43,6 +43,7 @@ void generateAlertMessage(char* buffer, size_t bufferSize,
                          SensorData& data);
 // Add these to DataLogger.h after the existing declarations:
 void storeInBuffer(const SensorData& data);
-void flushBufferedData(RTC_DS3231& rtc, SystemSettings& settings, SystemStatus& status);
+void flushBufferedData(RTC_PCF8523& rtc, SystemSettings& settings, SystemStatus& status);
+bool hasBufferedData();
 bool hasBufferedData();
 #endif // DATA_LOGGER_H

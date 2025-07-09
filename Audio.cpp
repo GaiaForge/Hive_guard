@@ -171,8 +171,7 @@ float estimateSpectralCentroidOptimized() {
         int windowStart = w * windowSize;
         int zeroCrossings = 0;
         float windowEnergy = 0;
-        int lastSign = 0;
-        
+                
         // Analyze this window
         for (int i = 1; i < windowSize; i++) {
             int idx = windowStart + i;
@@ -470,7 +469,7 @@ void updateDailyPattern(DailyPattern& pattern, uint8_t hour,
 // =============================================================================
 
 uint8_t detectEnvironmentalStress(SensorData& data, AudioAnalysis& audio,
-                                 DailyPattern& pattern, RTC_DS3231& rtc) {
+                                 DailyPattern& pattern, RTC_PCF8523& rtc) {
     uint8_t stressFactors = STRESS_NONE;
     
     // Temperature stress (African bees sensitive to heat)

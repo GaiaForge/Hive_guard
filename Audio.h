@@ -56,7 +56,7 @@ AbscondingIndicators detectAbscondingRisk(AudioAnalysis& analysis,
 void updateDailyPattern(DailyPattern& pattern, uint8_t hour, 
                        uint8_t activity, float temperature);
 uint8_t detectEnvironmentalStress(SensorData& data, AudioAnalysis& audio,
-                                 DailyPattern& pattern, RTC_DS3231& rtc);
+                                 DailyPattern& pattern, RTC_PCF8523& rtc);
 
                                  SpectralFeatures analyzeAudioFFT();
 void updateActivityTrend(ActivityTrend& trend, SpectralFeatures& current, uint8_t hour);

@@ -19,7 +19,7 @@ void showStartupScreen(Adafruit_SH1106G& display);
 
 void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode, 
                   SensorData& data, SystemSettings& settings,
-                  SystemStatus& status, RTC_DS3231& rtc,
+                  SystemStatus& status, RTC_PCF8523& rtc,
                   SpectralFeatures& features, ActivityTrend& trend);
 
 void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected, 
@@ -31,7 +31,7 @@ void checkSDCardAtStartup(Adafruit_SH1106G& display, SystemStatus& status);
 
 // Screen drawing functions
 void drawDashboard(Adafruit_SH1106G& display, SensorData& data, 
-                  SystemStatus& status, RTC_DS3231& rtc);
+                  SystemStatus& status, RTC_PCF8523& rtc);
 void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data, 
                     SystemSettings& settings, SpectralFeatures& features,
                     ActivityTrend& trend);
@@ -42,7 +42,7 @@ void drawPowerScreen(Adafruit_SH1106G& display, SensorData& data,
                     
 // UI component functions
 void drawHeader(Adafruit_SH1106G& display, SensorData& data, SystemStatus& status);
-void drawTimeDate(Adafruit_SH1106G& display, int y, RTC_DS3231& rtc, 
+void drawTimeDate(Adafruit_SH1106G& display, int y, RTC_PCF8523& rtc, 
                  SystemStatus& status);
 void drawEnvironmentalData(Adafruit_SH1106G& display, int y, SensorData& data);
 void drawBeeState(Adafruit_SH1106G& display, int x, int y, uint8_t state);

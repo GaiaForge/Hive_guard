@@ -56,7 +56,8 @@ enum FieldEvents {
     EVENT_QUEEN_SEEN = 5,
     EVENT_SWARM_CAUGHT = 6,
     EVENT_ABSCONDED = 7,
-    EVENT_PREDATOR = 8
+    EVENT_PREDATOR = 8,
+    EVENT_SYSTEM_UPDATE = 9
 };
 
 // Environmental stress factors

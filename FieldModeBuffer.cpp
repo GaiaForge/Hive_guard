@@ -1,6 +1,8 @@
 // FieldModeBuffer.cpp
 #include "FieldModeBuffer.h"
 #include "DataLogger.h"
+#include "Utils.h"    // For getBeeStateString
+#include "Alerts.h"   // For getAlertString
 
 FieldModeBufferManager fieldBuffer;
 
@@ -48,7 +50,7 @@ void FieldModeBufferManager::clearBuffer() {
     buffer.lastFlushTime = millis();
 }
 
-bool FieldModeBufferManager::flushToSD(RTC_DS3231& rtc, SystemStatus& status) {
+bool FieldModeBufferManager::flushToSD(RTC_PCF8523& rtc, SystemStatus& status) {
     if (buffer.count == 0) {
         return true; // Nothing to flush
     }

@@ -10,6 +10,11 @@
 #include "Config.h"
 #include "DataStructures.h"
 
+
+void configurePCF8523ForFieldUse(RTC_PCF8523& rtc);
+bool checkPCF8523Health(RTC_PCF8523& rtc);
+void printPCF8523Status(RTC_PCF8523& rtc);
+
 // Button handling functions
 void updateButtonStates();
 bool wasButtonPressed(int button);

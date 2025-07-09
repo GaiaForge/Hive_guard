@@ -75,7 +75,7 @@ void updateDiagnosticLine(Adafruit_SH1106G& display, const char* message) {
 
 void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode, 
                   SensorData& data, SystemSettings& settings,
-                  SystemStatus& status, RTC_DS3231& rtc,
+                  SystemStatus& status, RTC_PCF8523& rtc,
                   SpectralFeatures& features, ActivityTrend& trend) {
     if (!status.displayWorking) return;
     
@@ -107,7 +107,7 @@ void updateDisplay(Adafruit_SH1106G& display, DisplayMode mode,
 
 
 void drawDashboard(Adafruit_SH1106G& display, SensorData& data, 
-                  SystemStatus& status, RTC_DS3231& rtc) {
+                  SystemStatus& status, RTC_PCF8523& rtc) {
     display.clearDisplay();
     display.setTextColor(SH110X_WHITE);
     display.setTextSize(1);
@@ -117,7 +117,7 @@ void drawDashboard(Adafruit_SH1106G& display, SensorData& data,
         DateTime now = rtc.now();
         display.setCursor(0, 0);
         // Full date format
-        char dateStr[18];
+        char dateStr[22];
         sprintf(dateStr, "%02d/%02d/%04d %02d:%02d", now.month(), now.day(), now.year(), now.hour(), now.minute());
         display.print(dateStr);
     } else {
@@ -454,7 +454,7 @@ void drawHeader(Adafruit_SH1106G& display, SensorData& data, SystemStatus& statu
     display.drawLine(0, 10, 127, 10, SH110X_WHITE);
 }
 
-void drawTimeDate(Adafruit_SH1106G& display, int y, RTC_DS3231& rtc, 
+void drawTimeDate(Adafruit_SH1106G& display, int y, RTC_PCF8523& rtc, 
                  SystemStatus& status) {
     display.setCursor(0, y);
     display.write(0x07); // Clock symbol
@@ -462,12 +462,12 @@ void drawTimeDate(Adafruit_SH1106G& display, int y, RTC_DS3231& rtc,
     
     if (status.rtcWorking) {
         DateTime now = rtc.now();
-        char timeStr[6];
+        char timeStr[8];
         sprintf(timeStr, "%02d:%02d", now.hour(), now.minute());
         display.print(timeStr);
         
         display.setCursor(48, y);
-        char dateStr[9];
+        char dateStr[12];
         sprintf(dateStr, "%02d/%02d/%02d", now.day(), now.month(), now.year() % 100);
         display.print(dateStr);
     } else {

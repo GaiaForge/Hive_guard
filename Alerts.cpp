@@ -296,7 +296,7 @@ void getAlertStatistics(uint32_t& totalAlerts, uint32_t alertCounts[8]) {
 // ALERT LOG
 // =============================================================================
 
-void logAlert(uint8_t alertType, float value, RTC_DS3231& rtc, SystemStatus& status) {
+void logAlert(uint8_t alertType, float value, RTC_PCF8523& rtc, SystemStatus& status) {
     if (!status.sdWorking || !status.rtcWorking) return;
     
     SDLib::File alertLog = SD.open("/alerts.log", FILE_WRITE);

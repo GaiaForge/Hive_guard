@@ -44,7 +44,7 @@ void exitSettingsMenu(MenuState& state, DisplayMode& mode, SystemSettings& setti
 // =============================================================================
 
 void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
-                       SystemSettings& settings, RTC_DS3231& rtc,
+                       SystemSettings& settings, RTC_PCF8523& rtc,
                        SensorData& currentData, SystemStatus& status) {
     static bool editingInitialized = false;
     static DateTime editDateTime;
@@ -268,9 +268,10 @@ void drawEditBluetoothMode(Adafruit_SH1106G& display, BluetoothMode mode) {
 // =============================================================================
 
 void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state, 
-                       SystemSettings& settings, RTC_DS3231& rtc,
+                       SystemSettings& settings, RTC_PCF8523& rtc,  // ← Changed type
                        DateTime& editDateTime, bool& editingInitialized,
                        bool* buttonPressed, SystemStatus& status) {
+    
     static int editValue = 0;
     static bool inEditMode = false;
     
@@ -285,7 +286,7 @@ void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state,
             state.selectedItem++;
             if (state.selectedItem > 4) state.selectedItem = 0;
         }
-        if (wasButtonPressed(2)) { // SELECT - Enter edit mode
+        if (wasButtonPressed(2)) { // SELECT - save
             inEditMode = true;
             switch (state.selectedItem) {
                 case 0: editValue = editDateTime.year(); break;
@@ -336,11 +337,11 @@ void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state,
         if (wasButtonPressed(2)) { // SELECT - Save value
             // Update the DateTime object with new value
             switch (state.selectedItem) {
-                case 0:
-                    editDateTime = DateTime(editValue, editDateTime.month(), 
-                                          editDateTime.day(), editDateTime.hour(), 
-                                          editDateTime.minute(), editDateTime.second());
-                    break;
+            case 0:
+                editDateTime = DateTime(editValue, editDateTime.month(), 
+                                    editDateTime.day(), editDateTime.hour(), 
+                                    editDateTime.minute(), editDateTime.second());
+                break;
                 case 1:
                     editDateTime = DateTime(editDateTime.year(), editValue, 
                                           editDateTime.day(), editDateTime.hour(), 
@@ -366,7 +367,13 @@ void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state,
             // Update RTC if working
             if (status.rtcWorking) {
                 rtc.adjust(editDateTime);
-                Serial.println(F("RTC updated"));
+                
+                // PCF8523 SPECIFIC: Ensure oscillator is running after time update
+                if (!rtc.isrunning()) {
+                    rtc.start();  // Start the oscillator if it stopped
+                }
+                
+                Serial.println(F("PCF8523 time updated"));
             }
             
             // Exit edit mode

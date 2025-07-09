@@ -19,7 +19,7 @@ public:
     void clearBuffer();
     
     // Buffer flushing to SD
-    bool flushToSD(RTC_DS3231& rtc, SystemStatus& status);
+    bool flushToSD(RTC_PCF8523& rtc, SystemStatus& status);
     
     // Get buffer for direct access (if needed)
     FieldModeBuffer& getBuffer() { return buffer; }

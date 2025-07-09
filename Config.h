@@ -48,6 +48,15 @@ const unsigned long BUTTON_INTERVAL = 50;      // 50ms
 const unsigned long AUDIO_INTERVAL = 100;      // 100ms
 const unsigned long DEBOUNCE_DELAY = 50;       // 50ms
 
+// PCF8523 specific settings
+#define RTC_BACKUP_BATTERY_SWITCHOVER true
+#define RTC_CALIBRATION_MODE PCF8523_TwoHours
+#define RTC_CAPACITOR_SELECTION PCF8523_Capacitor_12_5pF
+
+// Time sync settings  
+#define TIME_SYNC_INTERVAL_HOURS 24  // Sync with external time daily
+#define MAX_TIME_DRIFT_SECONDS 300   // 5 minutes max drift before warning
+
 // =============================================================================
 // AUDIO CONFIGURATION
 // =============================================================================

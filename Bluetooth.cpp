@@ -156,7 +156,7 @@ void BluetoothManager::update() {
                 
                 if (systemStatus && systemStatus->rtcWorking) {
                     // Get current hour from RTC
-                    extern RTC_DS3231 rtc;
+                    extern RTC_PCF8523 rtc;
                     DateTime now = rtc.now();
                     
                     bool shouldBeOn = isInScheduledHours(now.hour());
@@ -319,7 +319,7 @@ void BluetoothManager::handleCommand(uint8_t* data, uint16_t len) {
         case BT_CMD_SET_TIME:
             if (len >= 5 && systemStatus && systemStatus->rtcWorking) {
                 uint32_t timestamp = (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
-                extern RTC_DS3231 rtc;
+                extern RTC_PCF8523 rtc;
                 rtc.adjust(DateTime(timestamp));
                 sendResponse(BT_RESP_OK);
                 Serial.println(F("Time updated via Bluetooth"));
@@ -350,7 +350,7 @@ void BluetoothManager::sendResponse(BluetoothResponse response, uint8_t* data, u
 
 void BluetoothManager::sendCurrentData() {
     extern SensorData currentData;
-    extern RTC_DS3231 rtc;
+    extern RTC_PCF8523 rtc;
     
     char jsonData[BT_CHUNK_SIZE];
     
@@ -551,7 +551,7 @@ bool BluetoothManager::shouldBeDiscoverable() const {
             
         case BT_MODE_SCHEDULED:
             if (systemStatus && systemStatus->rtcWorking) {
-                extern RTC_DS3231 rtc;
+                extern RTC_PCF8523 rtc;
                 DateTime now = rtc.now();
                 return isInScheduledHours(now.hour());
             }

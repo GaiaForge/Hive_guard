@@ -192,7 +192,7 @@ bool isLeapYear(int year) {
 }
 
 String formatTimestamp(DateTime dt) {
-    char buffer[20];
+    char buffer[25];
     sprintf(buffer, "%04d-%02d-%02d %02d:%02d:%02d",
             dt.year(), dt.month(), dt.day(),
             dt.hour(), dt.minute(), dt.second());
@@ -314,6 +314,56 @@ void enterDeepSleep(uint32_t seconds) {
 #endif
 }
 
+/**
+ * PCF8523 Utility Functions
+ * Additional functions for PCF8523 specific features
+ */
+
+void configurePCF8523ForFieldUse(RTC_PCF8523& rtc) {
+    // Configure for low power field deployment
+        
+    // Enable battery switchover mode
+    rtc.enableSecondTimer(); // For accurate timekeeping
+    
+    Serial.println(F("PCF8523 configured for field deployment"));
+}
+
+bool checkPCF8523Health(RTC_PCF8523& rtc) {
+    // Check if RTC is still running and accurate
+    
+    // Check if oscillator is running
+    if (!rtc.isrunning()) {
+        Serial.println(F("Warning: PCF8523 oscillator stopped"));
+        return false;
+    }
+    
+    // Check for power issues
+    if (rtc.lostPower()) {
+        Serial.println(F("Warning: PCF8523 lost power"));
+        return false;
+    }
+    
+    return true;
+}
+
+void printPCF8523Status(RTC_PCF8523& rtc) {
+    Serial.println(F("\n=== PCF8523 RTC Status ==="));
+    
+    DateTime now = rtc.now();
+    Serial.print(F("Current time: "));
+    Serial.println(now.timestamp(DateTime::TIMESTAMP_FULL));
+    
+    Serial.print(F("Running: "));
+    Serial.println(rtc.isrunning() ? "YES" : "NO");
+    
+    Serial.print(F("Lost power: "));
+    Serial.println(rtc.lostPower() ? "YES" : "NO");
+    
+    Serial.print(F("Initialized: "));
+    Serial.println(rtc.initialized() ? "YES" : "NO");
+    
+    Serial.println(F("========================\n"));
+}
 // =============================================================================
 // DEBUG UTILITIES
 // =============================================================================

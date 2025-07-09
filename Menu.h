@@ -15,7 +15,7 @@
 void enterSettingsMenu(MenuState& state, DisplayMode& mode);
 void exitSettingsMenu(MenuState& state, DisplayMode& mode, SystemSettings& settings);
 void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state, 
-                       SystemSettings& settings, RTC_DS3231& rtc,
+                       SystemSettings& settings, RTC_PCF8523& rtc,
                        SensorData& currentData, SystemStatus& status);
 
 // Menu drawing functions
@@ -37,8 +37,9 @@ void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& set
 void drawSystemMenuWithFieldMode(Adafruit_SH1106G& display, int selected, SystemSettings& settings);
 
 // Sub-menu handlers
+// In Menu.h - Update function declaration:
 void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state, 
-                       SystemSettings& settings, RTC_DS3231& rtc,
+                       SystemSettings& settings, RTC_PCF8523& rtc,  // ← Changed from DS3231
                        DateTime& editDateTime, bool& editingInitialized,
                        bool* buttonPressed, SystemStatus& status);
 void handleSensorCalibMenu(Adafruit_SH1106G& display, MenuState& state, 

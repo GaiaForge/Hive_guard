@@ -26,6 +26,6 @@ void handleLowBatteryAlert(float voltage);
 // Alert statistics and logging
 void handleSDErrorAlert();
 void getAlertStatistics(uint32_t& totalAlerts, uint32_t alertCounts[8]);
-void logAlert(uint8_t alertType, float value, RTC_DS3231& rtc, SystemStatus& status);
+void logAlert(uint8_t alertType, float value, RTC_PCF8523& rtc, SystemStatus& status);
 
 #endif // ALERTS_H
