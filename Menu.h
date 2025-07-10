@@ -37,7 +37,7 @@ void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& set
 void drawSystemMenuWithFieldMode(Adafruit_SH1106G& display, int selected, SystemSettings& settings);
 
 // Sub-menu handlers
-// In Menu.h - Update function declaration:
+
 void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state, 
                        SystemSettings& settings, RTC_PCF8523& rtc,  // ← Changed from DS3231
                        DateTime& editDateTime, bool& editingInitialized,
@@ -67,6 +67,13 @@ void handleTextEdit(char* textBuffer, int maxLength, const char* title,
                    Adafruit_SH1106G& display, bool& editing);
 void drawTextEditor(Adafruit_SH1106G& display, const char* title, 
                    const char* text, int cursorPos, char currentChar);
+
+void handleBeePresetMenu(Adafruit_SH1106G& display, MenuState& state, 
+                        SystemSettings& settings, bool& editingInitialized,
+                        bool* buttonPressed);
+void drawBeePresetMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings);
+
+
 
 // Helper functions
 const char* getAudioMenuTitle(int item);

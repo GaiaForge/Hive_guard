@@ -8,8 +8,20 @@
 #include "DataLogger.h"
 #include "Sensors.h"
 #include "Alerts.h"
+#include "Settings.h" 
 
 #ifdef NRF52_SERIES
+
+extern const BeePresetInfo BEE_PRESETS[];
+extern const int NUM_BEE_PRESETS;
+
+extern void performFactoryReset(SystemSettings& settings, SystemStatus& status, Adafruit_SH1106G& display);
+extern void calibrateAudioLevels(SystemSettings& settings, int durationSeconds);
+extern void saveSettings(SystemSettings& settings);
+extern RTC_PCF8523 rtc;
+extern SensorData currentData;
+extern Adafruit_SH1106G display;
+
 
 // Global bluetooth manager instance
 BluetoothManager* bluetoothManagerInstance = nullptr;
@@ -183,6 +195,28 @@ void BluetoothManager::update() {
     updateAdvertising();
 }
 
+BluetoothMode BluetoothManager::getMode() const {
+    return settings.mode;
+}
+
+void BluetoothManager::forceDisconnect() {
+#ifdef NRF52_SERIES
+    if (state.clientConnected) {
+        Bluefruit.disconnect(Bluefruit.connHandle());
+        Serial.println(F("Forced Bluetooth disconnection"));
+    }
+#endif
+}
+
+
+void BluetoothManager::resetStatistics() {
+    state.totalConnections = 0;
+    state.totalDataTransferred = 0;
+    state.lastConnectionTime = 0;
+    Serial.println(F("Bluetooth statistics reset"));
+}
+
+
 void BluetoothManager::handleManualActivation() {
     if (settings.mode == BT_MODE_OFF) {
         Serial.println(F("Bluetooth is disabled"));
@@ -327,6 +361,103 @@ void BluetoothManager::handleCommand(uint8_t* data, uint16_t len) {
                 sendResponse(BT_RESP_ERROR);
             }
             break;
+
+        case BT_CMD_GET_SETTINGS:
+            sendAllSettings();
+            break;
+    
+        case BT_CMD_SET_SETTING:
+            if (len >= 3) {  // Command + Setting ID + Value
+                uint8_t settingId = data[1];
+                float value = *(float*)&data[2];  // or parse appropriately
+                updateSetting(settingId, value);
+            }
+            break;
+
+        case BT_CMD_SET_DATE_TIME:
+            if (len >= 7) {  // Command + 6 bytes (year, month, day, hour, minute, second)
+                uint16_t year = (data[1] << 8) | data[2];
+                uint8_t month = data[3];
+                uint8_t day = data[4];
+                uint8_t hour = data[5];
+                uint8_t minute = data[6];
+                setDateTime(year, month, day, hour, minute);
+            }
+            break;
+
+        case BT_CMD_START_AUDIO_CALIBRATION:
+            if (len >= 2) {
+                uint8_t durationSeconds = data[1];  // How long to calibrate
+                startAudioCalibration(durationSeconds);
+            } else {
+                sendResponse(BT_RESP_ERROR);
+            }
+            break;
+
+        case BT_CMD_GET_FILE_DATA:
+            if (len > 1) {
+                char filename[32];
+                memcpy(filename, &data[1], min(len-1, 31));
+                filename[min(len-1, 31)] = '\0';
+                sendFileData(filename);
+            }
+            break;
+
+        case BT_CMD_DELETE_FILE:
+            if (len > 1) {
+                char filename[32];
+                memcpy(filename, &data[1], min(len-1, 31));
+                filename[min(len-1, 31)] = '\0';
+                deleteFile(filename);
+            }
+            break;
+
+        case BT_CMD_GET_FILE_INFO:
+            if (len > 1) {
+                char filename[32];
+                memcpy(filename, &data[1], min(len-1, 31));
+                filename[min(len-1, 31)] = '\0';
+                sendFileInfo(filename);
+            }
+            break;
+
+        case BT_CMD_FACTORY_RESET:
+            // Factory reset command - requires safety confirmation
+            if (len >= 5 && data[1] == 0xDE && data[2] == 0xAD && 
+                data[3] == 0xBE && data[4] == 0xEF) {  // Safety check
+                Serial.println(F("Factory reset initiated via Bluetooth"));
+                performFactoryReset(*systemSettings, *systemStatus, display);
+                sendResponse(BT_RESP_OK);
+            } else {
+                Serial.println(F("Factory reset denied - invalid confirmation"));
+                sendResponse(BT_RESP_ERROR);
+            }
+            break;
+
+        case BT_CMD_SET_BEE_PRESET:
+            if (len >= 2) {
+                uint8_t presetId = data[1];
+                if (presetId > 0 && presetId < NUM_BEE_PRESETS) {
+                    extern void applyBeePreset(SystemSettings& settings, BeeType beeType);
+                    extern void saveSettings(SystemSettings& settings);
+                    
+                    applyBeePreset(*systemSettings, (BeeType)presetId);
+                    saveSettings(*systemSettings);
+                    sendResponse(BT_RESP_OK);
+                    
+                    Serial.print(F("Applied bee preset: "));
+                    Serial.println(getBeeTypeName((BeeType)presetId));
+                } else {
+                    sendResponse(BT_RESP_ERROR);
+                }
+            } else {
+                sendResponse(BT_RESP_ERROR);
+            }
+            break;
+
+        case BT_CMD_GET_BEE_PRESETS:
+            sendBeePresetList();
+            break;
             
         default:
             sendResponse(BT_RESP_ERROR);
@@ -334,17 +465,276 @@ void BluetoothManager::handleCommand(uint8_t* data, uint16_t len) {
     }
 }
 
+void BluetoothManager::sendAllSettings() {
+    extern BeeType detectCurrentBeeType(const SystemSettings& settings);
+    extern const char* getBeeTypeName(BeeType beeType);
+    
+    BeeType currentType = detectCurrentBeeType(*systemSettings);
+    
+    char jsonSettings[BT_CHUNK_SIZE];
+    
+    snprintf(jsonSettings, sizeof(jsonSettings),
+        "{"
+        "\"beeType\":\"%s\","              // NEW FIELD
+        "\"tempOffset\":%.1f,"
+        "\"humidityOffset\":%.1f,"
+        "\"audioSensitivity\":%d,"
+        "\"queenFreqMin\":%d,"
+        "\"queenFreqMax\":%d,"
+        "\"swarmFreqMin\":%d,"
+        "\"swarmFreqMax\":%d,"
+        "\"logInterval\":%d,"
+        "\"displayTimeout\":%d,"
+        "\"fieldMode\":%s"
+        "}",
+        getBeeTypeName(currentType),        // NEW FIELD
+        systemSettings->tempOffset,
+        systemSettings->humidityOffset,
+        systemSettings->audioSensitivity,
+        systemSettings->queenFreqMin,
+        systemSettings->queenFreqMax,
+        systemSettings->swarmFreqMin,
+        systemSettings->swarmFreqMax,
+        systemSettings->logInterval,
+        systemSettings->displayTimeoutMin,
+        systemSettings->fieldModeEnabled ? "true" : "false"
+    );
+    
+    sendResponse(BT_RESP_OK, (uint8_t*)jsonSettings, strlen(jsonSettings));
+}
+
+void BluetoothManager::sendFileData(const char* filename) {
+    if (!systemStatus || !systemStatus->sdWorking) {
+        sendResponse(BT_RESP_ERROR);
+        return;
+    }
+    
+    SDLib::File file = SD.open(filename, FILE_READ);
+    if (!file) {
+        sendResponse(BT_RESP_NOT_FOUND);
+        return;
+    }
+    
+    // Send file in chunks
+    uint8_t buffer[BT_CHUNK_SIZE - 1];
+    while (file.available()) {
+        size_t bytesRead = file.read(buffer, sizeof(buffer));
+        sendResponse(BT_RESP_OK, buffer, bytesRead);
+        delay(50); // Small delay between chunks
+    }
+    
+    file.close();
+    Serial.print(F("File sent: "));
+    Serial.println(filename);
+}
+
+void BluetoothManager::deleteFile(const char* filename) {
+    if (!systemStatus || !systemStatus->sdWorking) {
+        sendResponse(BT_RESP_ERROR);
+        return;
+    }
+    
+    if (SD.remove(filename)) {
+        sendResponse(BT_RESP_OK);
+        Serial.print(F("File deleted: "));
+        Serial.println(filename);
+    } else {
+        sendResponse(BT_RESP_NOT_FOUND);
+    }
+}
+
+void BluetoothManager::sendFileInfo(const char* filename) {
+    if (!systemStatus || !systemStatus->sdWorking) {
+        sendResponse(BT_RESP_ERROR);
+        return;
+    }
+    
+    SDLib::File file = SD.open(filename, FILE_READ);
+    if (!file) {
+        sendResponse(BT_RESP_NOT_FOUND);
+        return;
+    }
+    
+    char fileInfo[BT_CHUNK_SIZE];
+    snprintf(fileInfo, sizeof(fileInfo),
+        "{"
+        "\"name\":\"%s\","
+        "\"size\":%lu,"
+        "\"exists\":true"
+        "}",
+        filename,
+        file.size()
+    );
+    
+    file.close();
+    sendResponse(BT_RESP_OK, (uint8_t*)fileInfo, strlen(fileInfo));
+}
+
+void BluetoothManager::sendBeePresetList() {
+    extern const BeePresetInfo BEE_PRESETS[];
+    extern const int NUM_BEE_PRESETS;
+    
+    String presetList = "{\"presets\":[";
+    
+    for (int i = 1; i < NUM_BEE_PRESETS; i++) { // Skip custom (index 0)
+        if (i > 1) presetList += ",";
+        
+        presetList += "{\"id\":";
+        presetList += i;
+        presetList += ",\"name\":\"";
+        presetList += BEE_PRESETS[i].name;
+        presetList += "\",\"desc\":\"";
+        presetList += BEE_PRESETS[i].description;
+        presetList += "\"}";
+    }
+    
+    presetList += "]}";
+    sendResponse(BT_RESP_OK, (uint8_t*)presetList.c_str(), presetList.length());
+}
+
+void BluetoothManager::setDateTime(uint16_t year, uint8_t month, uint8_t day, 
+                                   uint8_t hour, uint8_t minute) {
+    if (systemStatus && systemStatus->rtcWorking) {
+        extern RTC_PCF8523 rtc;
+        DateTime newTime(year, month, day, hour, minute, 0);
+        rtc.adjust(newTime);
+        
+        Serial.println(F("Date/time updated via Bluetooth"));
+        sendResponse(BT_RESP_OK);
+    } else {
+        sendResponse(BT_RESP_ERROR);
+    }
+}
+
+void BluetoothManager::startAudioCalibration(uint8_t durationSeconds) {
+    Serial.print(F("Starting audio calibration for "));
+    Serial.print(durationSeconds);
+    Serial.println(F(" seconds"));
+    
+    // Use your existing calibration function
+    extern void calibrateAudioLevels(SystemSettings& settings, int durationSeconds);
+    calibrateAudioLevels(*systemSettings, durationSeconds);
+    
+    sendResponse(BT_RESP_OK);
+    Serial.println(F("Audio calibration completed via Bluetooth"));
+}
+
+void BluetoothManager::updateSetting(uint8_t settingId, float value) {
+    switch (settingId) {
+        case 1: // Temperature offset
+            systemSettings->tempOffset = constrain(value, -10.0f, 10.0f);
+            break;
+        case 2: // Humidity offset
+            systemSettings->humidityOffset = constrain(value, -20.0f, 20.0f);
+            break;
+        case 3: // Audio sensitivity
+            systemSettings->audioSensitivity = constrain((uint8_t)value, 0, 10);
+            break;
+        case 4: // Queen freq min
+            systemSettings->queenFreqMin = constrain((uint16_t)value, 50, 1000);
+            break;
+        case 5: // Queen freq max
+            systemSettings->queenFreqMax = constrain((uint16_t)value, 50, 1000);
+            break;
+        case 6: // Swarm freq min
+            systemSettings->swarmFreqMin = constrain((uint16_t)value, 50, 1000);
+            break;
+        case 7: // Swarm freq max
+            systemSettings->swarmFreqMax = constrain((uint16_t)value, 50, 1000);
+            break;
+        case 8: // Log interval
+            {
+                uint8_t interval = (uint8_t)value;
+                if (interval == 5 || interval == 10 || interval == 30 || interval == 60) {
+                    systemSettings->logInterval = interval;
+                } else {
+                    sendResponse(BT_RESP_ERROR);
+                    return;
+                }
+            }
+            break;
+        case 9: // Display timeout
+            systemSettings->displayTimeoutMin = constrain((uint8_t)value, 1, 30);
+            break;
+        case 10: // Field mode
+            systemSettings->fieldModeEnabled = (value > 0);
+            break;
+        case 11: // Temperature min threshold
+            systemSettings->tempMin = constrain(value, -10.0f, 40.0f);
+            break;
+        case 12: // Temperature max threshold
+            systemSettings->tempMax = constrain(value, 0.0f, 60.0f);
+            break;
+        case 13: // Humidity min threshold
+            systemSettings->humidityMin = constrain(value, 0.0f, 90.0f);
+            break;
+        case 14: // Humidity max threshold
+            systemSettings->humidityMax = constrain(value, 20.0f, 100.0f);
+            break;
+        case 15: // Stress threshold
+            systemSettings->stressThreshold = constrain((uint8_t)value, 0, 100);
+            break;
+        default:
+            sendResponse(BT_RESP_ERROR);
+            return;
+    }
+    
+    // Validate settings after update
+    extern void validateSettings(SystemSettings& settings);
+    validateSettings(*systemSettings);
+    
+    // Save to flash memory
+    saveSettings(*systemSettings);
+    
+    // Send confirmation
+    sendResponse(BT_RESP_OK);
+    
+    Serial.print(F("Setting "));
+    Serial.print(settingId);
+    Serial.print(F(" updated to "));
+    Serial.println(value);
+}
+
 void BluetoothManager::sendResponse(BluetoothResponse response, uint8_t* data, uint16_t len) {
 #ifdef NRF52_SERIES
+    if (!state.clientConnected) {
+        Serial.println(F("Cannot send response - no client connected"));
+        return;
+    }
+    
     uint8_t buffer[BT_CHUNK_SIZE];
     buffer[0] = (uint8_t)response;
     
     if (data && len > 0) {
-        memcpy(&buffer[1], data, min(len, BT_CHUNK_SIZE - 1));
-        dataCharacteristic.notify(buffer, len + 1);
+        uint16_t actualLen = min(len, (uint16_t)(BT_CHUNK_SIZE - 1));
+        memcpy(&buffer[1], data, actualLen);
+        
+        if (dataCharacteristic.notify(buffer, actualLen + 1)) {
+            state.totalDataTransferred += actualLen + 1;
+            Serial.print(F("BT: Sent "));
+            Serial.print(actualLen + 1);
+            Serial.println(F(" bytes"));
+        } else {
+            Serial.println(F("BT: Failed to send data"));
+        }
     } else {
-        dataCharacteristic.notify(buffer, 1);
+        if (dataCharacteristic.notify(buffer, 1)) {
+            state.totalDataTransferred += 1;
+            Serial.print(F("BT: Sent response 0x"));
+            Serial.println(response, HEX);
+        } else {
+            Serial.println(F("BT: Failed to send response"));
+        }
     }
+#else
+    Serial.print(F("BT: Would send response 0x"));
+    Serial.print(response, HEX);
+    if (data && len > 0) {
+        Serial.print(F(" with "));
+        Serial.print(len);
+        Serial.print(F(" bytes"));
+    }
+    Serial.println(F(" (platform not supported)"));
 #endif
 }
 
@@ -422,19 +812,94 @@ void BluetoothManager::sendFileList() {
         return;
     }
     
-    // Simple file listing - in a real implementation, you'd scan the SD card
-    char fileList[BT_CHUNK_SIZE];
-    snprintf(fileList, sizeof(fileList),
-        "{"
-        "\"files\":["
-        "\"2024-12.CSV\","
-        "\"alerts.log\","
-        "\"diagnostics.log\""
-        "]"
-        "}"
-    );
+    // Start building JSON file list
+    String fileList = "{\"files\":[";
+    bool firstFile = true;
     
-    sendResponse(BT_RESP_OK, (uint8_t*)fileList, strlen(fileList));
+    // Scan root directory
+    SDLib::File root = SD.open("/");
+    if (root) {
+        while (true) {
+            SDLib::File entry = root.openNextFile();
+            if (!entry) break;
+            
+            if (!entry.isDirectory()) {
+                if (!firstFile) {
+                    fileList += ",";
+                }
+                fileList += "{\"name\":\"";
+                fileList += entry.name();
+                fileList += "\",\"size\":";
+                fileList += entry.size();
+                fileList += "}";
+                firstFile = false;
+            }
+            entry.close();
+            
+            // Prevent overflow
+            if (fileList.length() > BT_CHUNK_SIZE - 50) {
+                break;
+            }
+        }
+        root.close();
+    }
+    
+    // Scan HIVE_DATA directory
+    SDLib::File hiveDir = SD.open("/HIVE_DATA");
+    if (hiveDir) {
+        while (true) {
+            SDLib::File entry = hiveDir.openNextFile();
+            if (!entry) break;
+            
+            if (entry.isDirectory()) {
+                // Check for CSV files in year directories
+                String yearPath = "/HIVE_DATA/";
+                yearPath += entry.name();
+                
+                SDLib::File yearDir = SD.open(yearPath);
+                if (yearDir) {
+                    while (true) {
+                        SDLib::File csvFile = yearDir.openNextFile();
+                        if (!csvFile) break;
+                        
+                        if (!csvFile.isDirectory() && strstr(csvFile.name(), ".CSV")) {
+                            if (!firstFile) {
+                                fileList += ",";
+                            }
+                            fileList += "{\"name\":\"";
+                            fileList += yearPath + "/" + csvFile.name();
+                            fileList += "\",\"size\":";
+                            fileList += csvFile.size();
+                            fileList += "}";
+                            firstFile = false;
+                        }
+                        csvFile.close();
+                        
+                        // Prevent overflow
+                        if (fileList.length() > BT_CHUNK_SIZE - 50) {
+                            break;
+                        }
+                    }
+                    yearDir.close();
+                }
+            }
+            entry.close();
+            
+            if (fileList.length() > BT_CHUNK_SIZE - 50) {
+                break;
+            }
+        }
+        hiveDir.close();
+    }
+    
+    fileList += "]}";
+    
+    // Send the file list
+    sendResponse(BT_RESP_OK, (uint8_t*)fileList.c_str(), fileList.length());
+    
+    Serial.print(F("Sent file list ("));
+    Serial.print(fileList.length());
+    Serial.println(F(" bytes)"));
 }
 
 void BluetoothManager::sendFile(const char* filename) {

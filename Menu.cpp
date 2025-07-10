@@ -10,7 +10,7 @@
 #include "Bluetooth.h"
 
 // Menu item counts
-const int MAIN_MENU_ITEMS = 7;
+const int MAIN_MENU_ITEMS = 8;
 const int SENSOR_CALIB_ITEMS = 2;
 const int AUDIO_SETTINGS_ITEMS = 7;
 const int LOGGING_ITEMS = 2;
@@ -52,7 +52,7 @@ void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
     
     // Handle menu levels
     if (state.menuLevel == 0) {
-        // Main settings menu
+        // Main settings menu navigation (unchanged)
         if (wasButtonPressed(0)) { // UP
             state.selectedItem--;
             if (state.selectedItem < 0) state.selectedItem = MAIN_MENU_ITEMS - 1;
@@ -72,7 +72,7 @@ void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
                 editDateTime = rtc.now();
             }
             
-            resetButtonStates(); // Prevent button bleed-through to submenu
+            resetButtonStates();
         }
         if (wasButtonPressed(3)) { // BACK
             DisplayMode mode = MODE_DASHBOARD;
@@ -83,7 +83,7 @@ void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
         drawMainSettingsMenu(display, state.selectedItem);
         
     } else if (state.menuLevel == 1) {
-        // Sub-menus - create buttonPressed array for compatibility
+        // Sub-menus - UPDATE THE SWITCH STATEMENT:
         bool buttonPressed[4] = {false, false, false, false};
         
         switch (mainMenuSelection) {
@@ -91,28 +91,37 @@ void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
                 handleTimeDateMenu(display, state, settings, rtc, editDateTime,
                                  editingInitialized, buttonPressed, status);
                 break;
-            case 1: // Sensor Calibration
+                
+            case 1: // Bee Type Presets - NEW CASE
+                handleBeePresetMenu(display, state, settings, editingInitialized, buttonPressed);
+                break;
+                
+            case 2: // Sensor Calibration (was case 1)
                 handleSensorCalibMenu(display, state, settings, currentData,
                                     editingInitialized, buttonPressed);
                 break;
-            case 2: // Audio Settings
+                
+            case 3: // Audio Settings (was case 2)
                 handleAudioMenu(display, state, settings, editingInitialized, buttonPressed);
                 break;
-            case 3: // Logging Settings
+                
+            case 4: // Logging Settings (was case 3)
                 handleLoggingMenu(display, state, settings, editingInitialized, buttonPressed);
                 break;
-            case 4: // Alert Thresholds
+                
+            case 5: // Alert Thresholds (was case 4)
                 handleAlertMenu(display, state, settings, editingInitialized, buttonPressed);
                 break;
-            case 5: // System Settings
+                
+            case 6: // System Settings (was case 5)
                 handleSystemMenu(display, state, settings, editingInitialized, buttonPressed);
                 break;
-            case 6: //Bluetooth settings
+                
+            case 7: // Bluetooth settings (was case 6)
                 handleBluetoothMenu(display, state, settings, editingInitialized, buttonPressed);
-               break;
-            }
+                break;
+        }
     }
-
 }
 
 // =============================================================================
@@ -131,6 +140,7 @@ void drawMainSettingsMenu(Adafruit_SH1106G& display, int selected) {
     
     const char* items[] = {
         "Time & Date",
+        "Bee Type Presets",    
         "Sensor Calib",
         "Audio Settings",
         "Logging",
@@ -719,6 +729,15 @@ void drawAudioMenu(Adafruit_SH1106G& display, int selected, SystemSettings& sett
     display.println(F("Audio Settings"));
     display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
+    // Show current bee type at top
+    extern BeeType detectCurrentBeeType(const SystemSettings& settings);
+    extern const char* getBeeTypeName(BeeType beeType);
+    
+    BeeType currentType = detectCurrentBeeType(settings);
+    display.setCursor(0, 14);
+    display.print(F("Bee Type: "));
+    display.println(getBeeTypeName(currentType));
+    
     const char* labels[] = {
         "Sensitivity:", "Queen Min:", 
         "Queen Max:", "Swarm Min:", "Swarm Max:", "Stress Lvl:"
@@ -731,11 +750,11 @@ void drawAudioMenu(Adafruit_SH1106G& display, int selected, SystemSettings& sett
         settings.stressThreshold
     };
     
-    // Show 4 items at a time
+    // Show 4 items at a time, starting from y=26 (below bee type)
     int startItem = selected > 3 ? selected - 3 : 0;
     for (int i = 0; i < 4 && (startItem + i) < 6; i++) {
         int itemIdx = startItem + i;
-        int y = 16 + (i * 10);
+        int y = 26 + (i * 10);
         
         if (itemIdx == selected) {
             display.setCursor(0, y);
@@ -873,6 +892,86 @@ void drawLoggingMenu(Adafruit_SH1106G& display, int selected, SystemSettings& se
     display.setCursor(12, 32);
     display.print(F("Logging: "));
     display.print(settings.logEnabled ? "ON" : "OFF");
+    
+    display.display();
+}
+
+
+// =============================================================================
+// BEE PRESET FUNCTIONS (add to DataStructures.cpp)
+// =============================================================================
+
+
+void handleBeePresetMenu(Adafruit_SH1106G& display, MenuState& state, 
+                        SystemSettings& settings, bool& editingInitialized,
+                        bool* buttonPressed) {
+    static bool editing = false;
+    static int presetMenuItem = 0;
+    const int PRESET_ITEMS = NUM_BEE_PRESETS - 1; // Exclude custom from selection
+    
+    if (!editing) {
+        if (wasButtonPressed(0)) { // UP
+            presetMenuItem--;
+            if (presetMenuItem < 0) presetMenuItem = PRESET_ITEMS - 1;
+        }
+        if (wasButtonPressed(1)) { // DOWN
+            presetMenuItem++;
+            if (presetMenuItem >= PRESET_ITEMS) presetMenuItem = 0;
+        }
+        if (wasButtonPressed(2)) { // SELECT - Apply preset
+            BeeType selectedType = (BeeType)(presetMenuItem + 1); // +1 to skip custom
+            
+            // Apply the preset
+            applyBeePreset(settings, selectedType);
+            saveSettings(settings);
+            
+            // Show success message
+            display.clearDisplay();
+            display.setCursor(15, 20);
+            display.print(F("Preset Applied!"));
+            display.setCursor(10, 30);
+            display.print(getBeeTypeName(selectedType));
+            display.display();
+            delay(2000);
+            return;
+        }
+        if (wasButtonPressed(3)) { // BACK
+            state.menuLevel = 0;
+            state.selectedItem = 1; // Return to bee presets in main menu
+        }
+        
+        drawBeePresetMenu(display, presetMenuItem, settings);
+    }
+}
+
+void drawBeePresetMenu(Adafruit_SH1106G& display, int selected, SystemSettings& settings) {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    
+    display.setCursor(15, 0);
+    display.println(F("Bee Type Presets"));
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    
+    // Show current type
+    BeeType currentType = detectCurrentBeeType(settings);
+    display.setCursor(0, 14);
+    display.print(F("Current: "));
+    display.print(getBeeTypeName(currentType));
+    
+    // List available presets (skip custom)
+    for (int i = 0; i < 3 && i < (NUM_BEE_PRESETS - 1); i++) {
+        int presetIdx = i + 1; // +1 to skip custom
+        int y = 26 + (i * 12);
+        
+        if (i == selected) {
+            display.setCursor(0, y);
+            display.print(F(">"));
+        }
+        
+        display.setCursor(12, y);
+        display.print(BEE_PRESETS[presetIdx].name);
+    }
     
     display.display();
 }

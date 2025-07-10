@@ -5,6 +5,7 @@
 
 #include "DataStructures.h"
 #include "Config.h"
+const int NUM_BEE_PRESETS = 5;
 
 // =============================================================================
 // INITIALIZATION FUNCTIONS
@@ -343,6 +344,163 @@ void printSystemStatus(const SystemStatus& status) {
     Serial.print(F("SD Working: ")); Serial.println(status.sdWorking ? "YES" : "NO");
     Serial.print(F("Microphone Working: ")); Serial.println(status.pdmWorking ? "YES" : "NO");
     Serial.println(F("====================="));
+}
+
+// Bee preset data array
+const BeePresetInfo BEE_PRESETS[NUM_BEE_PRESETS] = {
+    // Custom (user-defined)
+    {
+        "Custom",
+        "User-defined settings",
+        DEFAULT_QUEEN_FREQ_MIN,     // 200
+        DEFAULT_QUEEN_FREQ_MAX,     // 350
+        DEFAULT_SWARM_FREQ_MIN,     // 400
+        DEFAULT_SWARM_FREQ_MAX,     // 600
+        DEFAULT_STRESS_THRESHOLD,   // 70
+        DEFAULT_AUDIO_SENSITIVITY,  // 5
+        DEFAULT_TEMP_MIN,           // 15.0
+        DEFAULT_TEMP_MAX,           // 40.0
+        DEFAULT_HUMIDITY_MIN,       // 40.0
+        DEFAULT_HUMIDITY_MAX        // 80.0
+    },
+    
+    // European honey bees (Apis mellifera)
+    {
+        "European",
+        "European honey bees - temperate climate",
+        180,    // queenFreqMin - slightly lower
+        320,    // queenFreqMax
+        350,    // swarmFreqMin - less aggressive swarming
+        550,    // swarmFreqMax
+        75,     // stressThreshold - higher tolerance
+        5,      // audioSensitivity
+        10.0,   // tempMin - cold tolerant
+        35.0,   // tempMax
+        35.0,   // humidityMin - broader range
+        85.0    // humidityMax
+    },
+    
+    // African honey bees (Apis mellifera scutellata)
+    {
+        "African", 
+        "African honey bees - hot climate, defensive",
+        AFRICAN_QUEEN_FREQ_MIN,     // 230 - higher pitched
+        AFRICAN_QUEEN_FREQ_MAX,     // 380
+        AFRICAN_SWARM_FREQ_MIN,     // 420 - more aggressive
+        AFRICAN_SWARM_FREQ_MAX,     // 650
+        60,                         // stressThreshold - lower (more sensitive)
+        6,                          // audioSensitivity - higher
+        AFRICAN_TEMP_MIN,           // 18.0 - less cold tolerant
+        AFRICAN_TEMP_MAX,           // 35.0 - heat adapted
+        30.0,                       // humidityMin - arid adapted
+        90.0                        // humidityMax
+    },
+    
+    // Carniolan bees (gentle, good for beginners)
+    {
+        "Carniolan",
+        "Carniolan bees - gentle, winter hardy",
+        170,    // queenFreqMin - calm, lower frequency
+        300,    // queenFreqMax
+        320,    // swarmFreqMin - gentle swarming
+        500,    // swarmFreqMax
+        80,     // stressThreshold - very calm
+        4,      // audioSensitivity - lower (quieter bees)
+        5.0,    // tempMin - very cold tolerant
+        32.0,   // tempMax - prefer cooler
+        40.0,   // humidityMin
+        80.0    // humidityMax
+    },
+    
+    // Italian bees (prolific, good producers)
+    {
+        "Italian",
+        "Italian bees - prolific, good producers",
+        190,    // queenFreqMin
+        340,    // queenFreqMax
+        380,    // swarmFreqMin - moderate swarming
+        580,    // swarmFreqMax
+        70,     // stressThreshold - moderate
+        5,      // audioSensitivity
+        12.0,   // tempMin - moderate cold tolerance
+        38.0,   // tempMax - heat tolerant
+        35.0,   // humidityMin
+        85.0    // humidityMax
+    }
+};
+
+// =============================================================================
+// BEE PRESET FUNCTIONS (add to DataStructures.cpp)
+// =============================================================================
+
+const char* getBeeTypeName(BeeType beeType) {
+    if (beeType >= 0 && beeType < NUM_BEE_PRESETS) {
+        return BEE_PRESETS[beeType].name;
+    }
+    return "Unknown";
+}
+
+const char* getBeeTypeDescription(BeeType beeType) {
+    if (beeType >= 0 && beeType < NUM_BEE_PRESETS) {
+        return BEE_PRESETS[beeType].description;
+    }
+    return "Unknown bee type";
+}
+
+BeeType detectCurrentBeeType(const SystemSettings& settings) {
+    // Check if settings match any preset exactly
+    for (int i = 1; i < NUM_BEE_PRESETS; i++) { // Skip custom (index 0)
+        const BeePresetInfo& preset = BEE_PRESETS[i];
+        
+        if (settings.queenFreqMin == preset.queenFreqMin &&
+            settings.queenFreqMax == preset.queenFreqMax &&
+            settings.swarmFreqMin == preset.swarmFreqMin &&
+            settings.swarmFreqMax == preset.swarmFreqMax &&
+            settings.stressThreshold == preset.stressThreshold) {
+            return (BeeType)i;
+        }
+    }
+    
+    // If no exact match, return custom
+    return BEE_TYPE_CUSTOM;
+}
+
+void applyBeePreset(SystemSettings& settings, BeeType beeType) {
+    if (beeType < 0 || beeType >= NUM_BEE_PRESETS) {
+        return;
+    }
+    
+    const BeePresetInfo& preset = BEE_PRESETS[beeType];
+    
+    // Apply audio settings
+    settings.queenFreqMin = preset.queenFreqMin;
+    settings.queenFreqMax = preset.queenFreqMax;
+    settings.swarmFreqMin = preset.swarmFreqMin;
+    settings.swarmFreqMax = preset.swarmFreqMax;
+    settings.stressThreshold = preset.stressThreshold;
+    settings.audioSensitivity = preset.audioSensitivity;
+    
+    // Apply environmental thresholds
+    settings.tempMin = preset.tempMin;
+    settings.tempMax = preset.tempMax;
+    settings.humidityMin = preset.humidityMin;
+    settings.humidityMax = preset.humidityMax;
+    
+    // Update current bee type tracking
+    settings.currentBeeType = beeType;
+    
+    Serial.print(F("Applied "));
+    Serial.print(preset.name);
+    Serial.println(F(" bee preset"));
+}
+
+BeePresetInfo getBeePresetInfo(BeeType beeType) {
+    if (beeType >= 0 && beeType < NUM_BEE_PRESETS) {
+        return BEE_PRESETS[beeType];
+    }
+    
+    // Return custom preset if invalid
+    return BEE_PRESETS[0];
 }
 
 

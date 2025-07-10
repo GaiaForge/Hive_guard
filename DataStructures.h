@@ -1,10 +1,12 @@
 /**
  * DataStructures.h
- * Data structures and enumerations
+ * Data structures and enumerations with bee presets
  */
 
 #ifndef DATA_STRUCTURES_H
 #define DATA_STRUCTURES_H
+
+extern const int NUM_BEE_PRESETS;
 
 #include <Arduino.h>
 
@@ -23,6 +25,15 @@ enum BeeState {
     BEE_DEFENSIVE = 6,
     BEE_STRESSED = 7,
     BEE_UNKNOWN = 8
+};
+
+// Bee type presets for easy configuration
+enum BeeType {
+    BEE_TYPE_CUSTOM = 0,        // User-defined settings
+    BEE_TYPE_EUROPEAN = 1,      // European honey bees (Apis mellifera)
+    BEE_TYPE_AFRICAN = 2,       // African honey bees (Apis mellifera scutellata)
+    BEE_TYPE_CARNIOLAN = 3,     // Carniolan bees (gentle, good for beginners)
+    BEE_TYPE_ITALIAN = 4        // Italian bees (prolific, good producers)
 };
 
 // Alert flags (bit flags)
@@ -105,6 +116,10 @@ struct SystemSettings {
     uint8_t displayBrightness; // 0-10
     bool fieldModeEnabled;     // Field mode toggle
     uint8_t displayTimeoutMin; // Display timeout (minutes)
+    
+    // Bee type tracking (for preset detection)
+    uint8_t currentBeeType;    // BeeType enum value
+    
     uint32_t magicNumber;      // Validation
     uint16_t checksum;         // Simple checksum
 };
@@ -182,8 +197,6 @@ struct DailyPattern {
     bool abnormalPattern;          // Deviation from normal
 };
 
-// Add to DataStructures.h after the existing structures
-
 // =============================================================================
 // BUFFERED READINGS FOR FIELD MODE
 // =============================================================================
@@ -211,6 +224,28 @@ struct FieldModeBuffer {
 };
 
 // =============================================================================
+// BEE PRESET STRUCTURE
+// =============================================================================
+
+struct BeePresetInfo {
+    const char* name;
+    const char* description;
+    uint16_t queenFreqMin;
+    uint16_t queenFreqMax;
+    uint16_t swarmFreqMin;
+    uint16_t swarmFreqMax;
+    uint8_t stressThreshold;
+    uint8_t audioSensitivity;
+    float tempMin;
+    float tempMax;
+    float humidityMin;
+    float humidityMax;
+};
+
+extern const BeePresetInfo BEE_PRESETS[];
+extern const int NUM_BEE_PRESETS;
+
+// =============================================================================
 // FUNCTION DECLARATIONS
 // =============================================================================
 
@@ -230,5 +265,12 @@ bool isValidSystemSettings(const SystemSettings& settings);
 void copyLogEntry(const SensorData& data, LogEntry& entry, uint32_t timestamp);
 String sensorDataToString(const SensorData& data);
 String systemStatusToString(const SystemStatus& status);
+
+// Bee preset functions
+const char* getBeeTypeName(BeeType beeType);
+const char* getBeeTypeDescription(BeeType beeType);
+BeeType detectCurrentBeeType(const SystemSettings& settings);
+void applyBeePreset(SystemSettings& settings, BeeType beeType);
+BeePresetInfo getBeePresetInfo(BeeType beeType);
 
 #endif // DATA_STRUCTURES_H

@@ -48,16 +48,26 @@ enum BluetoothStatus {
 };
 
 enum BluetoothCommand {
-    BT_CMD_PING = 0x01,
-    BT_CMD_GET_STATUS = 0x02,
-    BT_CMD_GET_CURRENT_DATA = 0x03,
-    BT_CMD_LIST_FILES = 0x04,
-    BT_CMD_GET_FILE = 0x05,
-    BT_CMD_GET_DAILY_SUMMARY = 0x06,
-    BT_CMD_GET_ALERTS = 0x07,
-    BT_CMD_GET_DEVICE_INFO = 0x08,
-    BT_CMD_SET_TIME = 0x09,
-    BT_CMD_START_CALIBRATION = 0x0A
+    BT_CMD_PING = 0x01, // Ping command to check connection
+    BT_CMD_GET_STATUS = 0x02, // Get current device status
+    BT_CMD_GET_CURRENT_DATA = 0x03, // Get current sensor data
+    BT_CMD_LIST_FILES = 0x04, // List all available files
+    BT_CMD_GET_FILE = 0x05, // Get specific file by name
+    BT_CMD_GET_DAILY_SUMMARY = 0x06, // Get daily summary for a specific date
+    BT_CMD_GET_ALERTS = 0x07, // Get alert history
+    BT_CMD_GET_DEVICE_INFO = 0x08, // Get device information  
+    BT_CMD_SET_TIME = 0x09, // Set system time (RTC)
+    BT_CMD_START_CALIBRATION = 0x0A, // Start calibration process
+    BT_CMD_GET_SETTINGS = 0x10,      // Get all current settings
+    BT_CMD_SET_SETTING = 0x11,       // Set individual setting
+    BT_CMD_FACTORY_RESET = 0x12,      // Reset to defaults
+    BT_CMD_SET_DATE_TIME = 0x13,  // Set individual date/time components
+    BT_CMD_START_AUDIO_CALIBRATION = 0x14, // Start audio calibration
+    BT_CMD_GET_FILE_DATA = 0x15,     // Download file content
+    BT_CMD_DELETE_FILE = 0x16,       // Delete file
+    BT_CMD_GET_FILE_INFO = 0x17,     // Get file size/date
+    BT_CMD_SET_BEE_PRESET = 0x18,     // Set bee type preset
+    BT_CMD_GET_BEE_PRESETS = 0x19,    // Get available presets
 };
 
 enum BluetoothResponse {
@@ -124,6 +134,9 @@ private:
     BLECharacteristic statusCharacteristic;
 #endif
     
+    void sendAllSettings();
+    void updateSetting(uint8_t settingId, float value);
+    
     // Internal timing
     unsigned long lastUpdate;
     unsigned long scheduleCheckTime;
@@ -137,7 +150,14 @@ private:
     void sendFile(const char* filename);
     void sendDailySummary(uint32_t date);
     void sendAlerts();
+    void sendBeePresetList();
     void sendDeviceInfo();
+    void sendFileData(const char* filename);
+    void deleteFile(const char* filename);
+    void sendFileInfo(const char* filename);
+    void setDateTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
+    void startAudioCalibration(uint8_t durationSeconds);
+    
     
     void updateAdvertising();
     

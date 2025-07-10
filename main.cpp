@@ -169,6 +169,23 @@ void setup() {
     updateDiagnosticLine(display, "PowerMgr: OK");
     delay(500);
 
+    // INITIALIZE BLUETOOTH MANAGER - ADD THIS
+    Serial.println(F("=== Initializing Bluetooth Manager ==="));
+    bluetoothManager.initialize(&systemStatus, &settings);
+    updateDiagnosticLine(display, "Bluetooth: Initializing...");
+    delay(1000);
+
+    // CHECK BLUETOOTH STATUS - ADD THIS
+    Serial.print(F("Bluetooth Mode: "));
+    Serial.println(bluetoothModeToString(bluetoothManager.getSettings().mode));
+    Serial.print(F("Bluetooth Status: "));
+    Serial.println(bluetoothStatusToString(bluetoothManager.getStatus()));
+    Serial.print(F("Should be discoverable: "));
+    Serial.println(bluetoothManager.shouldBeDiscoverable() ? "YES" : "NO");
+
+    updateDiagnosticLine(display, "Bluetooth: Checking...");
+    delay(2000);
+
     // Watchdog setup
     setupWatchdog(settings);
     
@@ -197,6 +214,8 @@ void loop() {
     
     // FEED WATCHDOG AT START OF EACH LOOP ITERATION
     feedWatchdog();
+
+    bluetoothManager.update();
     
     // Check for DFU requests periodically
     checkDFURequests();
