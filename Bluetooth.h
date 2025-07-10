@@ -18,10 +18,10 @@
 // =============================================================================
 
 #define BT_DEVICE_NAME_PREFIX "HiveMonitor_"
-#define BT_SERVICE_UUID "12345678-1234-1234-1234-123456789ABC"
-#define BT_DATA_CHAR_UUID "87654321-4321-4321-4321-CBA987654321"
-#define BT_COMMAND_CHAR_UUID "11111111-2222-3333-4444-555555555555"
-#define BT_STATUS_CHAR_UUID "22222222-3333-4444-5555-666666666666"
+#define BT_SERVICE_UUID "12345678-1234-1234-1234-123456789abc"        // lowercase 'abc'
+#define BT_DATA_CHAR_UUID "87654321-4321-4321-4321-cba987654321"      // lowercase 'cba'  
+#define BT_COMMAND_CHAR_UUID "11111111-2222-3333-4444-555555555555"   // all numbers, so no change
+#define BT_STATUS_CHAR_UUID "22222222-3333-4444-5555-666666666666"    // all numbers, so no change
 
 // Transfer settings
 #define BT_CHUNK_SIZE 240

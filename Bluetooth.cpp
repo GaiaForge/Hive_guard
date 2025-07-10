@@ -73,13 +73,12 @@ void BluetoothManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSe
     systemSettings = sysSettings;
     
     loadBluetoothSettings();
-    
-#ifdef NRF52_SERIES
+#if 1
+//#ifdef NRF52_SERIES
     // Initialize Bluefruit
     Bluefruit.begin();
-    Bluefruit.setTxPower(0);  // 0dBm for good range vs power balance
+    Bluefruit.setTxPower(0);
     
-    // Set device name
     String deviceName = getDeviceName();
     Bluefruit.setName(deviceName.c_str());
     
@@ -87,7 +86,7 @@ void BluetoothManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSe
     Bluefruit.Periph.setConnectCallback(bluetoothConnectCallback);
     Bluefruit.Periph.setDisconnectCallback(bluetoothDisconnectCallback);
     
-    // Setup BLE service
+    // Setup BLE service BEFORE starting advertising
     setupBLEService();
     
     Serial.print(F("Bluetooth initialized as: "));
@@ -95,17 +94,26 @@ void BluetoothManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSe
     Serial.print(F("Mode: "));
     Serial.println(bluetoothModeToString(settings.mode));
     
+    // ADD THIS DEBUG CHECK
+    Serial.println(F("=== BLE SERVICE DEBUG ==="));
+    Serial.print(F("Service UUID: "));
+    Serial.println(BT_SERVICE_UUID);
+    Serial.print(F("Data Char UUID: "));
+    Serial.println(BT_DATA_CHAR_UUID);
+    Serial.print(F("Command Char UUID: "));
+    Serial.println(BT_COMMAND_CHAR_UUID);
+    
     // Start advertising based on current mode
     if (shouldBeDiscoverable()) {
         startAdvertising();
     }
-#else
-    Serial.println(F("Bluetooth not supported on this platform"));
 #endif
 }
 
 void BluetoothManager::setupBLEService() {
-#ifdef NRF52_SERIES
+
+#if 1
+//#ifdef NRF52_SERIES
     Serial.println("Setting up BLE service...");
     
     // Setup service
@@ -243,27 +251,40 @@ void BluetoothManager::handleManualActivation() {
 }
 
 void BluetoothManager::startAdvertising() {
-#ifdef NRF52_SERIES
+#if 1
+//#ifdef NRF52_SERIES
     if (state.status == BT_STATUS_ADVERTISING) return;
     
-    // Setup advertising packet
+    // IMPORTANT: Stop any existing advertising first
+    Bluefruit.Advertising.stop();
+    
+    // IMPORTANT: Clear all advertising data
+    Bluefruit.Advertising.clearData();
+    
+    // Setup advertising packet in the correct order
     Bluefruit.Advertising.addFlags(BLE_GAP_ADV_FLAGS_LE_ONLY_GENERAL_DISC_MODE);
     Bluefruit.Advertising.addTxPower();
-    Bluefruit.Advertising.addName();
-    Bluefruit.Advertising.addService(dataService);
     
-    // Set advertising parameters based on power mode
+    // Add the service BEFORE the name (order matters!)
+    Bluefruit.Advertising.addService(dataService);
+    Bluefruit.Advertising.addName();
+    
+    // Set advertising parameters
     if (settings.lowPowerMode) {
-        Bluefruit.Advertising.setInterval(2000, 5000);  // 2-5 second intervals for power saving
+        Bluefruit.Advertising.setInterval(2000, 5000);
     } else {
-        Bluefruit.Advertising.setInterval(32, 244);     // Fast advertising for quick connection
+        Bluefruit.Advertising.setInterval(32, 244);
     }
     
-    Bluefruit.Advertising.setFastTimeout(30);  // Fast advertising for 30 seconds, then slow
-    Bluefruit.Advertising.start(0);  // 0 = never timeout
+    Bluefruit.Advertising.setFastTimeout(30);
+    Bluefruit.Advertising.start(0);
     
     state.status = BT_STATUS_ADVERTISING;
-    Serial.println(F("Bluetooth advertising started"));
+    Serial.println(F("Bluetooth advertising started with service"));
+    
+    // Debug: Print what we're advertising
+    Serial.print(F("Advertising service UUID: "));
+    Serial.println(BT_SERVICE_UUID);
 #endif
 }
 

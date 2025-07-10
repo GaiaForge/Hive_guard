@@ -73,8 +73,10 @@ unsigned long lastAudioSample = 0;
 
 void setup() {
     Serial.begin(115200);
+
     while (!Serial && millis() < 3000);
-    Serial.println(F("=== Tanzania Hive Monitor v2.1 ==="));
+    Serial.println(F("=== HiveGuard System Starting ==="));
+    Serial.println(F("About to initialize Bluetooth..."));
     
     delay(1000);
     
@@ -163,19 +165,19 @@ void setup() {
         checkForPreviousReset();
     }
     
-    // INITIALIZE POWER MANAGER - NEW
+    // INITIALIZE POWER MANAGER - 
     Serial.print(F("Initializing Power Manager..."));
     powerManager.initialize(&systemStatus, &settings);
     updateDiagnosticLine(display, "PowerMgr: OK");
     delay(500);
 
-    // INITIALIZE BLUETOOTH MANAGER - ADD THIS
+    // INITIALIZE BLUETOOTH MANAGER -
     Serial.println(F("=== Initializing Bluetooth Manager ==="));
     bluetoothManager.initialize(&systemStatus, &settings);
     updateDiagnosticLine(display, "Bluetooth: Initializing...");
     delay(1000);
 
-    // CHECK BLUETOOTH STATUS - ADD THIS
+    // CHECK BLUETOOTH STATUS 
     Serial.print(F("Bluetooth Mode: "));
     Serial.println(bluetoothModeToString(bluetoothManager.getSettings().mode));
     Serial.print(F("Bluetooth Status: "));
@@ -185,6 +187,9 @@ void setup() {
 
     updateDiagnosticLine(display, "Bluetooth: Checking...");
     delay(2000);
+
+    Serial.println(F("Bluetooth initialization complete"));
+    bluetoothManager.printBluetoothStatus(); // This should show current status
 
     // Watchdog setup
     setupWatchdog(settings);
