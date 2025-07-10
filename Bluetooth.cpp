@@ -106,27 +106,37 @@ void BluetoothManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSe
 
 void BluetoothManager::setupBLEService() {
 #ifdef NRF52_SERIES
+    Serial.println("Setting up BLE service...");
+    
     // Setup service
     dataService.begin();
+    Serial.println("Data service started");
     
-    // Setup data characteristic (for large data transfer)
+    // Setup data characteristic
     dataCharacteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
     dataCharacteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
     dataCharacteristic.setFixedLen(BT_CHUNK_SIZE);
     dataCharacteristic.begin();
+    Serial.println("Data characteristic started");
     
-    // Setup command characteristic (for receiving commands)
+    // Setup command characteristic
     commandCharacteristic.setProperties(CHR_PROPS_WRITE | CHR_PROPS_WRITE_WO_RESP);
     commandCharacteristic.setPermission(SECMODE_OPEN, SECMODE_OPEN);
     commandCharacteristic.setWriteCallback(bluetoothCommandCallback);
     commandCharacteristic.setFixedLen(64);
     commandCharacteristic.begin();
+    Serial.println("Command characteristic started");
     
-    // Setup status characteristic (for device status)
+    // Setup status characteristic
     statusCharacteristic.setProperties(CHR_PROPS_READ | CHR_PROPS_NOTIFY);
     statusCharacteristic.setPermission(SECMODE_OPEN, SECMODE_NO_ACCESS);
     statusCharacteristic.setFixedLen(32);
     statusCharacteristic.begin();
+    Serial.println("Status characteristic started");
+    
+    Serial.print("Service UUID: ");
+    Serial.println(BT_SERVICE_UUID);
+    Serial.println("BLE service setup complete!");
 #endif
 }
 
