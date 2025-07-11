@@ -208,9 +208,9 @@ bool isMemoryHealthy() {
     MemoryInfo info = getMemoryInfo();
     
     // Conservative thresholds for field deployment reliability
-    if (info.free_heap < 512) return false;        // Need at least 512 bytes free heap
-    if (info.largest_free_block < 256) return false; // Avoid fragmentation issues
-    if ((info.used_stack * 100) / info.stack_size > 75) return false; // Stack usage < 75%
+    if (info.free_heap < 51200) return false;        // Need at least 512 bytes free heap
+    if (info.largest_free_block < 16384) return false; // Avoid fragmentation issues
+    if ((info.used_stack * 100) / info.stack_size > 80) return false; // Stack usage < 80%
     
     return true;
 }
@@ -342,7 +342,7 @@ bool readButton(int buttonNum) {
     }
     
     // Read analog value and consider pressed if below threshold
-    return (analogRead(pin) < 100);
+    return !digitalRead(pin);
 }
 
 // =============================================================================
