@@ -16,12 +16,33 @@ volatile int audioSampleIndex = 0;
 // =============================================================================
 
 void initializeAudio(SystemStatus& status) {
-    // Configure analog input for MAX9814
-    analogReadResolution(12);  // 12-bit resolution
+    analogReadResolution(12);
     
-    status.pdmWorking = true;  // Reuse this flag
-    Serial.println(F("MAX9814 analog microphone initialized"));
-    Serial.println(F("Using automatic gain control (AGC)"));
+    // Test A4 for actual microphone signal
+    int minVal = 4095, maxVal = 0;
+    
+    for (int i = 0; i < 20; i++) {
+        int reading = analogRead(A4);
+        if (reading < minVal) minVal = reading;
+        if (reading > maxVal) maxVal = reading;
+        delay(10);
+    }
+    
+    int variation = maxVal - minVal;
+    
+        
+    if (variation > 200) {
+        status.pdmWorking = true;
+        Serial.println(F("MAX9814 microphone detected on A4"));
+        Serial.print(F("Audio variation: "));
+        Serial.println(variation);
+    } else {
+        status.pdmWorking = false;
+        Serial.println(F("No microphone on A4 (floating pin)"));
+        Serial.print(F("A4 variation: "));
+        Serial.print(variation);
+        Serial.println(F(" (need >200 for mic)"));
+    }
 }
 
 // =============================================================================

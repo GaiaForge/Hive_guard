@@ -1,6 +1,6 @@
 /**
  * PowerManager.h
- * Power management system header
+ * Power management system header - FIXED VERSION
  */
 
 #ifndef POWER_MANAGER_H
@@ -83,7 +83,7 @@ private:
     unsigned long lastPowerCheck;
     unsigned long displayOffTime;
     unsigned long lastSleepTime;
-    
+
     // Power consumption estimates (mA)
     static const float POWER_TESTING_MA;
     static const float POWER_DISPLAY_MA;
@@ -95,6 +95,8 @@ private:
     void calculateRuntimeEstimate(float batteryVoltage);
     void handleDisplayTimeout();
     void configureButtonWakeup();
+    void checkFieldModeTimeout(unsigned long currentTime);    
+     
     
     
 public:
@@ -145,6 +147,8 @@ public:
     void prepareSleep();
     void wakeFromSleep();
     bool canEnterSleep() const;
+    void enterFieldSleep();  // FIXED: Added missing declaration
+    void wakeFromFieldSleep(); 
     
     // Battery and power monitoring
     PowerMode getCurrentPowerMode() const;

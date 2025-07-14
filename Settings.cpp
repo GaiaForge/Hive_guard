@@ -261,3 +261,91 @@ void clearUserData() {
     }
 }
 
+// =============================================================================
+// SETTINGS INFORMATION DISPLAY - ADD THIS TO THE END OF Settings.cpp
+// =============================================================================
+
+void printSettingsInfo(const SystemSettings& settings) {
+    Serial.println(F("\n=== Current Settings ==="));
+    
+    // Calibration
+    Serial.print(F("Temperature Offset: "));
+    Serial.print(settings.tempOffset, 1);
+    Serial.println(F("°C"));
+    
+    Serial.print(F("Humidity Offset: "));
+    Serial.print(settings.humidityOffset, 1);
+    Serial.println(F("%"));
+    
+    // Audio settings
+    Serial.print(F("Audio Sensitivity: "));
+    Serial.print(settings.audioSensitivity);
+    Serial.println(F("/10"));
+    
+    Serial.print(F("Queen Frequency: "));
+    Serial.print(settings.queenFreqMin);
+    Serial.print(F("-"));
+    Serial.print(settings.queenFreqMax);
+    Serial.println(F(" Hz"));
+    
+    Serial.print(F("Swarm Frequency: "));
+    Serial.print(settings.swarmFreqMin);
+    Serial.print(F("-"));
+    Serial.print(settings.swarmFreqMax);
+    Serial.println(F(" Hz"));
+    
+    Serial.print(F("Stress Threshold: "));
+    Serial.print(settings.stressThreshold);
+    Serial.println(F("%"));
+    
+    // Logging
+    Serial.print(F("Log Interval: "));
+    Serial.print(settings.logInterval);
+    Serial.println(F(" minutes"));
+    
+    Serial.print(F("Logging Enabled: "));
+    Serial.println(settings.logEnabled ? "YES" : "NO");
+    
+    // Alert thresholds
+    Serial.print(F("Temperature Range: "));
+    Serial.print(settings.tempMin, 1);
+    Serial.print(F(" - "));
+    Serial.print(settings.tempMax, 1);
+    Serial.println(F("°C"));
+    
+    Serial.print(F("Humidity Range: "));
+    Serial.print(settings.humidityMin, 1);
+    Serial.print(F(" - "));
+    Serial.print(settings.humidityMax, 1);
+    Serial.println(F("%"));
+    
+    // System settings
+    Serial.print(F("Display Brightness: "));
+    Serial.print(settings.displayBrightness);
+    Serial.println(F("/10"));
+    
+    Serial.print(F("Field Mode: "));
+    Serial.println(settings.fieldModeEnabled ? "ENABLED" : "DISABLED");
+    
+    Serial.print(F("Display Timeout: "));
+    Serial.print(settings.displayTimeoutMin);
+    Serial.println(F(" minutes"));
+    
+    // Bee type detection
+    BeeType currentType = detectCurrentBeeType(settings);
+    Serial.print(F("Detected Bee Type: "));
+    Serial.println(getBeeTypeName(currentType));
+    
+    // Validation status
+    Serial.print(F("Settings Valid: "));
+    Serial.println(isValidSystemSettings(settings) ? "YES" : "NO");
+    
+    Serial.print(F("Magic Number: 0x"));
+    Serial.println(settings.magicNumber, HEX);
+    
+    Serial.print(F("Checksum: 0x"));
+    Serial.println(settings.checksum, HEX);
+    
+    Serial.println(F("========================\n"));
+}
+

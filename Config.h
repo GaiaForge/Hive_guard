@@ -33,10 +33,25 @@
 #define VBATPIN A6
 
 // Buttons
-#define BTN_UP    A0
-#define BTN_DOWN  A1
-#define BTN_SELECT A2
-#define BTN_BACK  A3
+#define BTN_UP    5
+#define BTN_DOWN  6
+#define BTN_SELECT 9
+#define BTN_BACK  11
+
+// =============================================================================
+// DISPLAY POWER CONTROL
+// =============================================================================
+
+// Display power control
+#define DISPLAY_POWER_PIN 12    // Digital pin to control display power
+#define DISPLAY_POWER_ON HIGH   // Pin state for display on
+#define DISPLAY_POWER_OFF LOW   // Pin state for display off
+
+
+// Field mode display timeout (1-5 minutes only)
+#define DEFAULT_DISPLAY_TIMEOUT_MIN 2     // Default 2 minutes
+#define MIN_DISPLAY_TIMEOUT_MIN 1         // Minimum 1 minute  
+#define MAX_DISPLAY_TIMEOUT_MIN 5         // Maximum 5 minutes
 
 // =============================================================================
 // TIMING CONSTANTS
@@ -95,13 +110,13 @@ const unsigned long DEBOUNCE_DELAY = 50;       // 50ms
 // System defaults
 #define DEFAULT_DISPLAY_BRIGHTNESS 7
 #define DEFAULT_FIELD_MODE_ENABLED false
-#define DEFAULT_DISPLAY_TIMEOUT_MIN 5
+
 
 // =============================================================================
 // SYSTEM CONSTANTS
 // =============================================================================
 
-#define SETTINGS_MAGIC_NUMBER 0xBEE51234  // Changed to valid hex
+#define SETTINGS_MAGIC_NUMBER 0xBEE51234  
 #define MAX_LOG_AGE_DAYS 365  // 1 year retention
 
 // Battery voltage thresholds

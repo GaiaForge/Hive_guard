@@ -28,7 +28,6 @@ void showStartupScreen(Adafruit_SH1106G& display) {
     display.display();
 }
 
-// Add these functions to Display.cpp
 
 static int currentDiagLine = 0;
 
@@ -67,7 +66,30 @@ void updateDiagnosticLine(Adafruit_SH1106G& display, const char* message) {
     }
 
 
+// =============================================================================
+// HARDWARE DISPLAY POWER CONTROL
+// =============================================================================
 
+void initializeDisplayPower() {
+    pinMode(DISPLAY_POWER_PIN, OUTPUT);
+    digitalWrite(DISPLAY_POWER_PIN, DISPLAY_POWER_ON);
+    Serial.println(F("Display power control initialized on pin 12"));
+}
+
+void setDisplayPower(bool powerOn) {
+    if (powerOn) {
+        digitalWrite(DISPLAY_POWER_PIN, DISPLAY_POWER_ON);
+        delay(50); // Small delay for display to power up
+        Serial.println(F("Display powered ON (pin 12 HIGH)"));
+    } else {
+        digitalWrite(DISPLAY_POWER_PIN, DISPLAY_POWER_OFF);
+        Serial.println(F("Display powered OFF (pin 12 LOW)"));
+    }
+}
+
+bool isDisplayPowered() {
+    return digitalRead(DISPLAY_POWER_PIN) == DISPLAY_POWER_ON;
+}
 // =============================================================================
 // MAIN DISPLAY UPDATE
 // =============================================================================
@@ -152,7 +174,7 @@ void drawDashboard(Adafruit_SH1106G& display, SensorData& data,
         display.print(data.humidity, 1);
         display.print(F("%"));
     } else {
-        display.print(F("--.-%%"));
+        display.print(F("--.-%"));
     }
     
     // Pressure
@@ -410,12 +432,14 @@ void drawPowerScreen(Adafruit_SH1106G& display, SensorData& data,
     display.print(getBatteryLevel(data.batteryVoltage));
     display.print(F("%"));
     
-    // Power source indication
+    // Power source indication  
     display.setCursor(0, 40);
-    if (data.batteryVoltage >= BATTERY_USB_THRESHOLD) {
+    if (data.batteryVoltage >= 4.0) {  // USB is typically 4.0V+
         display.print(F("Source: USB Power"));
-    } else {
+    } else if (data.batteryVoltage >= 3.2) {  // Battery range 3.2-4.2V
         display.print(F("Source: Battery"));
+    } else {
+        display.print(F("Source: Unknown"));
     }
     
     // System uptime
