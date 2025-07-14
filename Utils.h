@@ -65,6 +65,8 @@ bool isLongPress(int button);
 bool shouldRepeat(int button);
 void resetButtonStates();
 bool readButton(int buttonNum);
+bool wasBluetoothButtonPressed();
+bool isBluetoothButtonHeld();
 
 // =============================================================================
 // STRING CONVERSION FUNCTIONS

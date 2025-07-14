@@ -58,15 +58,10 @@ void handleSystemMenu(Adafruit_SH1106G& display, MenuState& state,
                      SystemSettings& settings, bool& editingInitialized,
                      bool* buttonPressed);
 
-void handleBluetoothMenu(Adafruit_SH1106G& display, MenuState& state, 
-                        SystemSettings& settings, bool& editingInitialized,
-                        bool* buttonPressed);
-void drawBluetoothMenu(Adafruit_SH1106G& display, int selected, BluetoothSettings& btSettings);
-void drawEditBluetoothMode(Adafruit_SH1106G& display, BluetoothMode mode);
-void handleTextEdit(char* textBuffer, int maxLength, const char* title, 
-                   Adafruit_SH1106G& display, bool& editing);
-void drawTextEditor(Adafruit_SH1106G& display, const char* title, 
-                   const char* text, int cursorPos, char currentChar);
+void handleSimpleBluetooth(Adafruit_SH1106G& display, MenuState& state, 
+                          SystemSettings& settings, bool& editingInitialized,
+                          bool* buttonPressed);
+void drawSimpleBluetoothMenu(Adafruit_SH1106G& display, int selected, BluetoothSettings& btSettings);
 
 void handleBeePresetMenu(Adafruit_SH1106G& display, MenuState& state, 
                         SystemSettings& settings, bool& editingInitialized,

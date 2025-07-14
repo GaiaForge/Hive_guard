@@ -58,10 +58,5 @@ void drawDetailedData(Adafruit_SH1106G& display, SensorData& data,
 void drawDailySummary(Adafruit_SH1106G& display, DailyPattern& pattern,
                      AbscondingIndicators& indicators);
 
-// Hardware display power control
-void initializeDisplayPower();
-void setDisplayPower(bool powerOn);
-bool isDisplayPowered();
-
 
 #endif // DISPLAY_H

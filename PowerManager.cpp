@@ -1,12 +1,11 @@
 /**
- * PowerManager.cpp - PHASE 3: Display Timeout Implementation
- * Added display timeout control for major power savings in field mode
+ * PowerManager.cpp - UPDATED: Display power control moved here
  */
 
 #include "PowerManager.h"
 #include "Utils.h"
 #include "Sensors.h"  // For getBatteryLevel
-
+#include "Bluetooth.h"
 // =============================================================================
 // POWER CONSUMPTION CONSTANTS (mA)
 // =============================================================================
@@ -59,15 +58,22 @@ PowerManager::PowerManager() {
        
     systemStatus = nullptr;
     systemSettings = nullptr;
-}
 
-// =============================================================================
-// REPLACE PowerManager::initialize() - CLEAN VERSION
-// =============================================================================
+    longPressStartTime = 0;
+    longPressDetected = false;
+}
 
 void PowerManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSettings) {
     systemStatus = sysStatus;
     systemSettings = sysSettings;
+    
+    // Initialize display power control hardware
+    initializeDisplayPower();
+
+    // Initialize Bluetooth button
+    pinMode(BTN_BLUETOOTH, INPUT_PULLUP);
+    Serial.println(F("Bluetooth button initialized on pin 13"));
+
     
     // Load display timeout settings from system settings
     if (sysSettings) {
@@ -82,17 +88,182 @@ void PowerManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSettin
     }
     
     status.lastUserActivity = millis();
+    status.lastBluetoothActivity = millis();
     status.totalUptime = millis();  // Set uptime reference
     status.lastFlushTime = millis();
-    // REMOVED: lastUserInteraction = millis(); // Don't initialize deleted variable
     
-    Serial.println(F("PowerManager initialized - Simple Field Mode"));
+    Serial.println(F("PowerManager initialized with display power control"));
     Serial.println(F("  - Power monitoring: ENABLED"));
     Serial.println(F("  - Field mode: ENABLED"));
-    Serial.println(F("  - Display control: ENABLED"));
+    Serial.println(F("  - Display control: ENABLED (Pin 12)"));
     Serial.print(F("  - Display timeout: "));
     Serial.print(settings.displayTimeoutMin);
     Serial.println(F(" minutes (1-5 range)"));
+}
+
+// Set Bluetooth manager reference
+void PowerManager::setBluetoothManager(BluetoothManager* btManager) {
+    bluetoothManager = btManager;
+    Serial.println(F("PowerManager: Bluetooth manager reference set"));
+}
+
+
+// =============================================================================
+// BLUETOOTH POWER CONTROL
+// =============================================================================
+
+void PowerManager::activateBluetooth() {
+    if (bluetoothManager == nullptr) {
+        Serial.println(F("PowerManager: Cannot activate Bluetooth - no manager reference"));
+        return;
+    }
+    
+    Serial.println(F("PowerManager: Activating Bluetooth (manual button press)"));
+    
+    status.bluetoothOn = true;
+    status.bluetoothManuallyActivated = true;
+    status.bluetoothState = COMP_POWER_ON;
+    status.lastBluetoothActivity = millis();
+    
+    // Turn on Bluetooth through the manager
+    bluetoothManager->setEnabled(true);
+    
+    Serial.print(F("Bluetooth activated for "));
+    Serial.print(settings.displayTimeoutMin);
+    Serial.println(F(" minutes"));
+}
+
+void PowerManager::deactivateBluetooth() {
+    if (bluetoothManager == nullptr) {
+        Serial.println(F("PowerManager: Cannot deactivate Bluetooth - no manager reference"));
+        return;
+    }
+    
+    if (!status.bluetoothOn) {
+        return; // Already off
+    }
+    
+    Serial.println(F("PowerManager: Deactivating Bluetooth (timeout or manual)"));
+    
+    status.bluetoothOn = false;
+    status.bluetoothManuallyActivated = false;
+    status.bluetoothState = COMP_POWER_OFF;
+    
+    // Turn off Bluetooth through the manager
+    bluetoothManager->setEnabled(false);
+}
+
+bool PowerManager::isBluetoothOn() const {
+    return status.bluetoothOn;
+}
+
+void PowerManager::handleBluetoothConnection() {
+    if (status.bluetoothOn) {
+        status.lastBluetoothActivity = millis();
+        Serial.println(F("PowerManager: Bluetooth connected - timer reset"));
+    }
+}
+
+void PowerManager::handleBluetoothDisconnection() {
+    if (status.bluetoothOn) {
+        status.lastBluetoothActivity = millis();
+        Serial.println(F("PowerManager: Bluetooth disconnected - countdown started"));
+    }
+}
+
+unsigned long PowerManager::getBluetoothTimeRemaining() const {
+    if (!status.bluetoothOn || !status.fieldModeActive) {
+        return 0;
+    }
+    
+    unsigned long elapsed = millis() - status.lastBluetoothActivity;
+    if (elapsed >= status.bluetoothTimeoutMs) {
+        return 0;
+    }
+    
+    return status.bluetoothTimeoutMs - elapsed;
+}
+
+void PowerManager::handleBluetoothButtonPress() {
+    status.buttonPresses++;
+    
+    if (status.fieldModeActive) {
+        if (!status.bluetoothOn) {
+            Serial.println(F("PowerManager: Bluetooth button pressed - activating Bluetooth"));
+            activateBluetooth();
+        } else {
+            Serial.println(F("PowerManager: Bluetooth button pressed - Bluetooth already on"));
+            // Reset the timer
+            status.lastBluetoothActivity = millis();
+        }
+    } else {
+        Serial.println(F("PowerManager: Bluetooth button pressed in testing mode (Bluetooth always on)"));
+    }
+}
+
+
+// =============================================================================
+// HARDWARE DISPLAY POWER CONTROL 
+// =============================================================================
+
+void PowerManager::initializeDisplayPower() {
+    pinMode(DISPLAY_POWER_PIN, OUTPUT);
+    digitalWrite(DISPLAY_POWER_PIN, DISPLAY_POWER_ON);
+    status.displayOn = true;
+    status.displayState = COMP_POWER_ON;
+    Serial.println(F("Display power control initialized on pin 12"));
+}
+
+void PowerManager::turnOnDisplay() {
+    if (!status.displayOn) {
+        digitalWrite(DISPLAY_POWER_PIN, DISPLAY_POWER_ON);
+        delay(50); // Small delay for display to power up
+        status.displayOn = true;
+        status.displayState = COMP_POWER_ON;
+        Serial.println(F("PowerManager: Display turned ON (pin 12 HIGH)"));
+    }
+}
+
+void PowerManager::turnOffDisplay() {
+    if (status.displayOn && status.fieldModeActive) {
+        digitalWrite(DISPLAY_POWER_PIN, DISPLAY_POWER_OFF);
+        status.displayOn = false;
+        status.displayState = COMP_POWER_OFF;
+        displayOffTime = millis();
+        Serial.println(F("PowerManager: Display turned OFF (pin 12 LOW)"));
+    }
+}
+
+bool PowerManager::isDisplayOn() const {
+    // In testing mode, display is always considered on
+    if (!status.fieldModeActive) {
+        return true;
+    }
+    
+    return status.displayOn;
+}
+
+void PowerManager::resetDisplayTimeout() {
+    status.lastUserActivity = millis();
+    
+    if (status.fieldModeActive) {
+        // Silent timeout - no messages
+        // Timeout will be checked in checkFieldModeTimeout()
+    }
+}
+
+unsigned long PowerManager::getDisplayTimeRemaining() const {
+    // No timeout in testing mode
+    if (!status.fieldModeActive || !status.displayOn) {
+        return 0;
+    }
+    
+    unsigned long elapsed = millis() - status.lastUserActivity;
+    if (elapsed >= status.displayTimeoutMs) {
+        return 0;
+    }
+    
+    return status.displayTimeoutMs - elapsed;
 }
 
 // =============================================================================
@@ -106,11 +277,13 @@ void PowerManager::handleUserActivity() {
     if (status.fieldModeActive) {
         Serial.print(F("PowerManager: User activity in field mode (button #"));
         Serial.print(status.buttonPresses);
-        Serial.println(F(")"));
+        Serial.println(F(") - Display timer reset"));
         
         // Turn display on and reset timeout
         turnOnDisplay();
         resetDisplayTimeout();
+        
+        // NOTE: This does NOT reset Bluetooth timer - only display timer
         
     } else {
         Serial.print(F("PowerManager: User activity (button #"));
@@ -121,17 +294,43 @@ void PowerManager::handleUserActivity() {
     }
 }
 
+// NEW: Handle Bluetooth activity separately
+void PowerManager::handleBluetoothActivity() {
+    status.lastBluetoothActivity = millis();
+    
+    if (status.fieldModeActive && status.bluetoothOn) {
+        Serial.println(F("PowerManager: Bluetooth activity - Bluetooth timer reset"));
+    }
+}
+
 void PowerManager::update() {
     unsigned long currentTime = millis();
     
-    // Simple field mode logic: just check for display timeout
+    // Field mode logic: check both display and Bluetooth timeouts
     if (status.fieldModeActive) {
         checkFieldModeTimeout(currentTime);
+        checkBluetoothTimeout(currentTime);  // NEW: Check Bluetooth timeout separately
     }
     
     // Update power monitoring every 5 seconds
     if (currentTime - lastPowerCheck >= 5000) {
         lastPowerCheck = currentTime;
+    }
+}
+
+// Check Bluetooth timeout separately from display timeout
+void PowerManager::checkBluetoothTimeout(unsigned long currentTime) {
+    // Only check timeout if Bluetooth is currently on and manually activated
+    if (!status.bluetoothOn || !status.bluetoothManuallyActivated) {
+        return;
+    }
+    
+    unsigned long timeSinceActivity = currentTime - status.lastBluetoothActivity;
+    
+    // Check if timeout period has elapsed
+    if (timeSinceActivity >= status.bluetoothTimeoutMs) {
+        Serial.println(F("PowerManager: Bluetooth timeout reached - deactivating"));
+        deactivateBluetooth();
     }
 }
 
@@ -153,7 +352,6 @@ void PowerManager::checkFieldModeTimeout(unsigned long currentTime) {
 // =============================================================================
 // FIELD MODE LOGIC
 // =============================================================================
-
 
 void PowerManager::enterFieldSleep() {
     Serial.println(F("Field Mode: Display timeout reached - entering sleep"));
@@ -206,6 +404,14 @@ void PowerManager::enableFieldMode() {
     // Start timeout countdown silently
     resetDisplayTimeout();
     
+    // NEW: Turn off Bluetooth in field mode (will be manually activated)
+    if (bluetoothManager) {
+        deactivateBluetooth();
+    }
+
+    powerDownSensors();
+    powerDownAudio();
+    
     Serial.println(F("=== FIELD MODE ENABLED ==="));
     Serial.print(F("Log interval: "));
     Serial.print(systemSettings ? systemSettings->logInterval : 10);
@@ -213,6 +419,7 @@ void PowerManager::enableFieldMode() {
     Serial.print(F("Display timeout: "));
     Serial.print(settings.displayTimeoutMin);
     Serial.println(F(" minutes"));
+    Serial.println(F("Bluetooth: OFF (use external button to activate)"));
     Serial.println(F("Dashboard will display normally until timeout"));
     Serial.println(F("========================="));
 }
@@ -231,9 +438,21 @@ void PowerManager::disableFieldMode() {
     
     // Ensure display is on when exiting field mode
     turnOnDisplay();
+
+    // NEW: Turn Bluetooth back on for testing mode
+    if (bluetoothManager) {
+        bluetoothManager->setEnabled(true);
+        status.bluetoothOn = true;
+        status.bluetoothState = COMP_POWER_ON;
+    }
+
+    // Power sensors back up for testing mode
+    powerUpSensors();
+    powerUpAudio();
     
     Serial.println(F("=== FIELD MODE DISABLED ==="));
     Serial.println(F("Returning to Testing Mode"));
+    Serial.println(F("Bluetooth: ON (always on in testing mode)"));
     Serial.println(F("=========================="));
 }
 
@@ -241,73 +460,38 @@ bool PowerManager::isFieldModeActive() const {
     return status.fieldModeActive;
 }
 
-// =============================================================================
-// DISPLAY MANAGEMENT
-// =============================================================================
-
-void PowerManager::turnOnDisplay() {
-    if (!status.displayOn) {
-        // FIXED: Check if setDisplayPower exists before calling
-        #ifdef DISPLAY_POWER_PIN
-        extern void setDisplayPower(bool powerOn);
-        setDisplayPower(true);  // Hardware power on
-        delay(100);  // Wait for display to initialize
-        #endif
-        
-        status.displayOn = true;
-        status.displayState = COMP_POWER_ON;
-        
-        Serial.println(F("PowerManager: Display turned ON"));
-    }
-}
-
-void PowerManager::turnOffDisplay() {
-    if (status.displayOn && status.fieldModeActive) {
-        // FIXED: Check if setDisplayPower exists before calling
-        #ifdef DISPLAY_POWER_PIN
-        extern void setDisplayPower(bool powerOn);
-        setDisplayPower(false);  // Hardware power off
-        #endif
-        
-        status.displayOn = false;
-        status.displayState = COMP_POWER_OFF;
-        displayOffTime = millis();
-        
-        Serial.println(F("PowerManager: Display turned OFF"));
-    }
-}
-
-bool PowerManager::isDisplayOn() const {
-    // In testing mode, display is always considered on
-    if (!status.fieldModeActive) {
-        return true;
+bool PowerManager::checkForLongPressWake() {
+    // Only check for long press wake when display is off in field mode
+    if (!status.fieldModeActive || status.displayOn) {
+        longPressStartTime = 0;
+        longPressDetected = false;
+        return false;
     }
     
-    return status.displayOn;
+    // Check if any button is being held
+    bool anyButtonHeld = isButtonHeld(0) || isButtonHeld(1) || isButtonHeld(2) || isButtonHeld(3);
+    
+    if (anyButtonHeld) {
+        if (longPressStartTime == 0) {
+            longPressStartTime = millis();
+        } else if (millis() - longPressStartTime >= LONG_PRESS_WAKE_TIME && !longPressDetected) {
+            longPressDetected = true;
+            Serial.println(F("Long press detected - waking for full system access"));
+            
+            // Full wake: display on, reset timeout, but keep sensors down until needed
+            turnOnDisplay();
+            resetDisplayTimeout();
+            Serial.println(F("System awake - full menu access available"));
+            return true;
+        }
+    } else {
+        longPressStartTime = 0;
+        longPressDetected = false;
+    }
+    
+    return false;
 }
 
-void PowerManager::resetDisplayTimeout() {
-    status.lastUserActivity = millis();
-    
-    if (status.fieldModeActive) {
-        // Silent timeout - no messages
-        // Timeout will be checked in checkFieldModeTimeout()
-    }
-}
-
-unsigned long PowerManager::getDisplayTimeRemaining() const {
-    // No timeout in testing mode
-    if (!status.fieldModeActive || !status.displayOn) {
-        return 0;
-    }
-    
-    unsigned long elapsed = millis() - status.lastUserActivity;
-    if (elapsed >= status.displayTimeoutMs) {
-        return 0;
-    }
-    
-    return status.displayTimeoutMs - elapsed;
-}
 
 // =============================================================================
 // FIELD MODE TIMING
@@ -324,11 +508,38 @@ bool PowerManager::shouldTakeReading() const {
 
 void PowerManager::updateNextWakeTime(uint8_t logIntervalMinutes) {
     status.lastLogTime = millis();
-    status.nextWakeTime = status.lastLogTime + (logIntervalMinutes * 60000UL);
     
-    Serial.print(F("Next reading scheduled in "));
-    Serial.print(logIntervalMinutes);
-    Serial.println(F(" minutes"));
+    // Round to next full minute boundary
+    if (systemStatus && systemStatus->rtcWorking) {
+        extern RTC_PCF8523 rtc;
+        DateTime now = rtc.now();
+        
+        // Calculate next interval boundary (round up to next interval minute)
+        int nextMinute = ((now.minute() / logIntervalMinutes) + 1) * logIntervalMinutes;
+        int nextHour = now.hour();
+        
+        // Handle minute overflow
+        if (nextMinute >= 60) {
+            nextMinute = 0;
+            nextHour++;
+            if (nextHour >= 24) nextHour = 0;
+        }
+        
+        DateTime nextReading(now.year(), now.month(), now.day(), nextHour, nextMinute, 0);
+        status.nextWakeTime = nextReading.unixtime() * 1000UL; // Convert to millis
+        
+        Serial.print(F("Next reading at: "));
+        Serial.print(nextHour);
+        Serial.print(F(":"));
+        if (nextMinute < 10) Serial.print(F("0"));
+        Serial.println(nextMinute);
+    } else {
+        // Fallback if no RTC
+        status.nextWakeTime = status.lastLogTime + (logIntervalMinutes * 60000UL);
+        Serial.print(F("Next reading in "));
+        Serial.print(logIntervalMinutes);
+        Serial.println(F(" minutes (no RTC)"));
+    }
 }
 
 bool PowerManager::shouldEnterSleep() {
@@ -520,6 +731,23 @@ void PowerManager::powerUpAudio() {
     status.audioState = COMP_POWER_ON;
     Serial.println(F("PowerManager: Audio powered up"));
 }
+
+void PowerManager::powerDownBluetooth() {
+    if (bluetoothManager) {
+        bluetoothManager->setEnabled(false);
+    }
+    status.bluetoothState = COMP_POWER_OFF;
+    Serial.println(F("PowerManager: Bluetooth powered down"));
+}
+
+void PowerManager::powerUpBluetooth() {
+    if (bluetoothManager) {
+        bluetoothManager->setEnabled(true);
+    }
+    status.bluetoothState = COMP_POWER_ON;
+    Serial.println(F("PowerManager: Bluetooth powered up"));
+}
+
 
 // =============================================================================
 // SLEEP MANAGEMENT STUBS
@@ -715,6 +943,7 @@ void PowerManager::savePowerSettings() {
     }
     Serial.println(F("PowerManager: Power settings saved"));
 }
+
 
 // =============================================================================
 // GLOBAL HELPER FUNCTIONS

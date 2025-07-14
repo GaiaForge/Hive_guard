@@ -46,6 +46,11 @@ void exitSettingsMenu(MenuState& state, DisplayMode& mode, SystemSettings& setti
 void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
                        SystemSettings& settings, RTC_PCF8523& rtc,
                        SensorData& currentData, SystemStatus& status) {
+
+    // Reset field mode timeout when actively using settings menu
+    extern PowerManager powerManager;
+    powerManager.handleUserActivity();
+
     static bool editingInitialized = false;
     static DateTime editDateTime;
     static int mainMenuSelection = 0;
@@ -117,9 +122,9 @@ void handleSettingsMenu(Adafruit_SH1106G& display, MenuState& state,
                 handleSystemMenu(display, state, settings, editingInitialized, buttonPressed);
                 break;
                 
-            case 7: // Bluetooth settings (was case 6)
-                handleBluetoothMenu(display, state, settings, editingInitialized, buttonPressed);
-                break;
+            case 7: // Bluetooth settings - simplified
+            handleSimpleBluetooth(display, state, settings, editingInitialized, buttonPressed);
+            break;
         }
     }
 }
@@ -172,105 +177,6 @@ void drawMainSettingsMenu(Adafruit_SH1106G& display, int selected) {
     display.display();
 }
 
-
-// =============================================================================
-// BLUETOOTH MENU DRAWING FUNCTIONS
-// =============================================================================
-
-void drawBluetoothMenu(Adafruit_SH1106G& display, int selected, BluetoothSettings& btSettings) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
-    
-    display.setCursor(25, 0);
-    display.println(F("Bluetooth Setup"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
-    
-    const char* labels[] = {
-        "Mode:", "Manual Time:", "Start Hour:", "End Hour:", "Device ID:"
-    };
-    
-    // Show 4 items at a time
-    int startItem = selected > 3 ? selected - 3 : 0;
-    for (int i = 0; i < 4 && (startItem + i) < 5; i++) {
-        int itemIdx = startItem + i;
-        int y = 16 + (i * 10);
-        
-        if (itemIdx == selected) {
-            display.setCursor(0, y);
-            display.print(F(">"));
-        }
-        
-        display.setCursor(12, y);
-        display.print(labels[itemIdx]);
-        display.setCursor(75, y);
-        
-        switch (itemIdx) {
-            case 0: // Mode
-                display.print(bluetoothModeToString(btSettings.mode));
-                break;
-            case 1: // Manual Timeout
-                display.print(btSettings.manualTimeoutMin);
-                display.print(F("min"));
-                break;
-            case 2: // Start Hour
-                display.print(btSettings.scheduleStartHour);
-                display.print(F(":00"));
-                break;
-            case 3: // End Hour
-                display.print(btSettings.scheduleEndHour);
-                display.print(F(":00"));
-                break;
-            case 4: // Device ID
-                display.print(btSettings.deviceId);
-                break;
-        }
-    }
-    
-    // Show current status at bottom
-    extern BluetoothManager bluetoothManager;
-    display.setCursor(0, 56);
-    display.print(F("Status: "));
-    display.print(bluetoothStatusToString(bluetoothManager.getStatus()));
-    
-    display.display();
-}
-
-void drawEditBluetoothMode(Adafruit_SH1106G& display, BluetoothMode mode) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
-    
-    display.setCursor(25, 0);
-    display.println(F("Bluetooth Mode"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
-    
-    display.setTextSize(2);
-    display.setCursor(15, 25);
-    display.print(bluetoothModeToString(mode));
-    
-    display.setTextSize(1);
-    display.setCursor(0, 45);
-    switch (mode) {
-        case BT_MODE_OFF:
-            display.print(F("Bluetooth disabled"));
-            break;
-        case BT_MODE_MANUAL:
-            display.print(F("Button activated only"));
-            break;
-        case BT_MODE_SCHEDULED:
-            display.print(F("Active during set hours"));
-            break;
-        case BT_MODE_ALWAYS_ON:
-            display.print(F("Always discoverable"));
-            break;
-    }
-    
-    display.setCursor(5, 55);
-    display.print(F("UP/DN:Change SEL:Save"));
-    
-    display.display();
-}
 
 
 // =============================================================================
@@ -1264,6 +1170,109 @@ void drawSystemMenu(Adafruit_SH1106G& display, int selected, SystemSettings& set
     display.display();
 }
 
+void handleSimpleBluetooth(Adafruit_SH1106G& display, MenuState& state, 
+                          SystemSettings& settings, bool& editingInitialized,
+                          bool* buttonPressed) {
+    static bool editing = false;
+    static int bluetoothMenuItem = 0;
+    const int BLUETOOTH_ITEMS = 2;  // Just enabled/disabled and device ID
+    
+    extern BluetoothManager bluetoothManager;
+    
+    if (!editing) {
+        if (wasButtonPressed(0)) { // UP
+            bluetoothMenuItem--;
+            if (bluetoothMenuItem < 0) bluetoothMenuItem = BLUETOOTH_ITEMS - 1;
+        }
+        if (wasButtonPressed(1)) { // DOWN
+            bluetoothMenuItem++;
+            if (bluetoothMenuItem >= BLUETOOTH_ITEMS) bluetoothMenuItem = 0;
+        }
+        if (wasButtonPressed(2)) { // SELECT
+            editing = true;
+            if (bluetoothMenuItem == 0) {
+                state.editIntValue = bluetoothManager.getSettings().enabled ? 1 : 0;
+            } else {
+                state.editIntValue = bluetoothManager.getSettings().deviceId;
+            }
+        }
+        if (wasButtonPressed(3)) { // BACK
+            state.menuLevel = 0;
+            state.selectedItem = 7;  // Return to Bluetooth in main menu
+        }
+        
+        drawSimpleBluetoothMenu(display, bluetoothMenuItem, bluetoothManager.getSettings());
+        
+    } else {
+        // Editing mode
+        if (bluetoothMenuItem == 0) { // Bluetooth Enabled
+            if (wasButtonPressed(0) || wasButtonPressed(1)) { // Toggle
+                state.editIntValue = 1 - state.editIntValue;
+            }
+            if (wasButtonPressed(2)) { // SELECT - Save
+                bluetoothManager.setEnabled(state.editIntValue == 1);
+                editing = false;
+            }
+            drawEditBoolValue(display, "Bluetooth", state.editIntValue == 1);
+            
+        } else { // Device ID
+            if (wasButtonPressed(0) || shouldRepeat(0)) { // UP
+                state.editIntValue++;
+                if (state.editIntValue > 255) state.editIntValue = 1;
+            }
+            if (wasButtonPressed(1) || shouldRepeat(1)) { // DOWN
+                state.editIntValue--;
+                if (state.editIntValue < 1) state.editIntValue = 255;
+            }
+            if (wasButtonPressed(2)) { // SELECT - Save
+                bluetoothManager.getSettings().deviceId = state.editIntValue;
+                bluetoothManager.saveBluetoothSettings();
+                editing = false;
+            }
+            drawEditIntValue(display, "Device ID", state.editIntValue, "");
+        }
+        
+        if (wasButtonPressed(3)) { // BACK - Cancel
+            editing = false;
+        }
+    }
+}
+
+void drawSimpleBluetoothMenu(Adafruit_SH1106G& display, int selected, BluetoothSettings& btSettings) {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    
+    display.setCursor(25, 0);
+    display.println(F("Bluetooth Setup"));
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    
+    // Enabled/Disabled
+    if (selected == 0) {
+        display.setCursor(0, 20);
+        display.print(F(">"));
+    }
+    display.setCursor(12, 20);
+    display.print(F("Enabled: "));
+    display.print(btSettings.enabled ? "YES" : "NO");
+    
+    // Device ID  
+    if (selected == 1) {
+        display.setCursor(0, 32);
+        display.print(F(">"));
+    }
+    display.setCursor(12, 32);
+    display.print(F("Device ID: "));
+    display.print(btSettings.deviceId);
+    
+    // Show device name
+    display.setCursor(0, 48);
+    display.print(F("Name: HiveGuard_"));
+    display.print(btSettings.deviceId);
+    
+    display.display();
+}
+
 // =============================================================================
 // HELPER FUNCTIONS
 // =============================================================================
@@ -1324,257 +1333,3 @@ const char* getAudioMenuUnit(int item) {
     return "%";                   // Stress level
 }
 
-// =============================================================================
-// TEXT EDITING FOR BLUETOOTH NAMES
-// =============================================================================
-
-// Simple character set for naming (no spaces, field-friendly)
-const char CHAR_SET[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
-const int CHAR_SET_SIZE = sizeof(CHAR_SET) - 1;
-
-void handleTextEdit(char* textBuffer, int maxLength, const char* title, 
-                   Adafruit_SH1106G& display, bool& editing) {
-    static int cursorPos = 0;
-    static int charIndex = 0;
-    
-    if (!editing) {
-        cursorPos = strlen(textBuffer);
-        if (cursorPos >= maxLength) cursorPos = maxLength - 1;
-        charIndex = 0;
-        editing = true;
-    }
-    
-    if (wasButtonPressed(0)) { // UP - next character
-        charIndex++;
-        if (charIndex >= CHAR_SET_SIZE) charIndex = 0;
-    }
-    
-    if (wasButtonPressed(1)) { // DOWN - previous character  
-        charIndex--;
-        if (charIndex < 0) charIndex = CHAR_SET_SIZE - 1;
-    }
-    
-    if (wasButtonPressed(2)) { // SELECT - confirm character and move cursor
-        if (cursorPos < maxLength - 1) {
-            textBuffer[cursorPos] = CHAR_SET[charIndex];
-            textBuffer[cursorPos + 1] = '\0';
-            cursorPos++;
-            charIndex = 0;
-        }
-    }
-    
-    if (wasButtonPressed(3)) { // BACK - save and exit OR delete character
-        if (strlen(textBuffer) > 0 && cursorPos > 0) {
-            // Delete last character
-            cursorPos--;
-            textBuffer[cursorPos] = '\0';
-            charIndex = 0;
-        } else {
-            // Save and exit if string is not empty
-            if (strlen(textBuffer) > 0) {
-                editing = false;
-            }
-        }
-    }
-    
-    drawTextEditor(display, title, textBuffer, cursorPos, CHAR_SET[charIndex]);
-}
-
-void drawTextEditor(Adafruit_SH1106G& display, const char* title, 
-                   const char* text, int cursorPos, char currentChar) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
-    
-    // Title
-    display.setCursor(5, 0);
-    display.print(F("Edit: "));
-    display.print(title);
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
-    
-    // Current text
-    display.setCursor(5, 20);
-    display.print(F("Text: "));
-    display.print(text);
-    
-    // Show cursor and current character
-    display.setCursor(5, 32);
-    display.print(F("Char: "));
-    display.setTextSize(2);
-    display.print(currentChar);
-    
-    // Instructions
-    display.setTextSize(1);
-    display.setCursor(0, 48);
-    display.print(F("UP/DN:Char SEL:Add"));
-    display.setCursor(0, 56);
-    display.print(F("BACK:Del/Save"));
-    
-    display.display();
-}
-
-// =============================================================================
-// ENHANCED BLUETOOTH MENU WITH TEXT EDITING
-// =============================================================================
-
-void handleBluetoothMenu(Adafruit_SH1106G& display, MenuState& state, 
-                        SystemSettings& settings, bool& editingInitialized,
-                        bool* buttonPressed) {
-    static bool editing = false;
-    static int bluetoothMenuItem = 0;
-    const int BLUETOOTH_ITEMS = 8;  // Mode, Manual Timeout, Start Hour, End Hour, Device ID, Hive Name, Location, Beekeeper
-    
-    extern BluetoothManager bluetoothManager;
-    BluetoothSettings& btSettings = bluetoothManager.getSettings();
-    
-    if (!editing) {
-        if (wasButtonPressed(0)) { // UP
-            bluetoothMenuItem--;
-            if (bluetoothMenuItem < 0) bluetoothMenuItem = BLUETOOTH_ITEMS - 1;
-        }
-        if (wasButtonPressed(1)) { // DOWN
-            bluetoothMenuItem++;
-            if (bluetoothMenuItem >= BLUETOOTH_ITEMS) bluetoothMenuItem = 0;
-        }
-        if (wasButtonPressed(2)) { // SELECT
-            editing = true;
-            switch (bluetoothMenuItem) {
-                case 0: state.editIntValue = (int)btSettings.mode; break;
-                case 1: state.editIntValue = btSettings.manualTimeoutMin; break;
-                case 2: state.editIntValue = btSettings.scheduleStartHour; break;
-                case 3: state.editIntValue = btSettings.scheduleEndHour; break;
-                case 4: state.editIntValue = btSettings.deviceId; break;
-                case 5: // Hive Name - will be handled separately
-                case 6: // Location - will be handled separately  
-                case 7: // Beekeeper - will be handled separately
-                    break;
-            }
-        }
-        if (wasButtonPressed(3)) { // BACK
-            state.menuLevel = 0;
-            state.selectedItem = 6;  // Return to Bluetooth in main menu
-        }
-        
-        drawBluetoothMenu(display, bluetoothMenuItem, btSettings);
-        
-    } else {
-        // Editing mode
-        if (bluetoothMenuItem == 0) { // Bluetooth Mode
-            if (wasButtonPressed(0) || wasButtonPressed(1)) { // UP or DOWN - cycle through modes
-                state.editIntValue++;
-                if (state.editIntValue > 3) state.editIntValue = 0;  // 0=Off, 1=Manual, 2=Scheduled, 3=Always On
-            }
-            if (wasButtonPressed(2)) { // SELECT - Save
-                bluetoothManager.setMode((BluetoothMode)state.editIntValue);
-                editing = false;
-            }
-            drawEditBluetoothMode(display, (BluetoothMode)state.editIntValue);
-            
-        } else if (bluetoothMenuItem == 1) { // Manual Timeout
-            if (wasButtonPressed(0) || shouldRepeat(0)) { // UP
-                state.editIntValue += 5;
-                if (state.editIntValue > 120) state.editIntValue = 120;
-            }
-            if (wasButtonPressed(1) || shouldRepeat(1)) { // DOWN
-                state.editIntValue -= 5;
-                if (state.editIntValue < 5) state.editIntValue = 5;
-            }
-            if (wasButtonPressed(2)) { // SELECT - Save
-                bluetoothManager.setManualTimeout(state.editIntValue);
-                editing = false;
-            }
-            drawEditIntValue(display, "Manual Timeout", state.editIntValue, "min");
-            
-        } else if (bluetoothMenuItem == 2 || bluetoothMenuItem == 3) { // Schedule Hours
-            if (wasButtonPressed(0) || shouldRepeat(0)) { // UP
-                state.editIntValue++;
-                if (state.editIntValue > 23) state.editIntValue = 0;
-            }
-            if (wasButtonPressed(1) || shouldRepeat(1)) { // DOWN
-                state.editIntValue--;
-                if (state.editIntValue < 0) state.editIntValue = 23;
-            }
-            if (wasButtonPressed(2)) { // SELECT - Save
-                if (bluetoothMenuItem == 2) {
-                    bluetoothManager.setSchedule(state.editIntValue, btSettings.scheduleEndHour);
-                } else {
-                    bluetoothManager.setSchedule(btSettings.scheduleStartHour, state.editIntValue);
-                }
-                editing = false;
-            }
-            const char* title = (bluetoothMenuItem == 2) ? "Schedule Start" : "Schedule End";
-            drawEditIntValue(display, title, state.editIntValue, ":00");
-            
-        } else if (bluetoothMenuItem == 4) { // Device ID
-            if (wasButtonPressed(0) || shouldRepeat(0)) { // UP
-                state.editIntValue++;
-                if (state.editIntValue > 255) state.editIntValue = 1;
-            }
-            if (wasButtonPressed(1) || shouldRepeat(1)) { // DOWN
-                state.editIntValue--;
-                if (state.editIntValue < 1) state.editIntValue = 255;
-            }
-            if (wasButtonPressed(2)) { // SELECT - Save
-                btSettings.deviceId = state.editIntValue;
-                bluetoothManager.saveBluetoothSettings();
-                editing = false;
-            }
-            drawEditIntValue(display, "Device ID", state.editIntValue, "");
-            
-        } else if (bluetoothMenuItem == 5) { // Hive Name
-            static bool textEditing = false;
-            static char tempName[16];
-            
-            if (!textEditing) {
-                strcpy(tempName, btSettings.hiveName);
-                textEditing = true;
-            }
-            
-            handleTextEdit(tempName, sizeof(tempName), "Hive Name", display, textEditing);
-            
-            if (!textEditing) {
-                strcpy(btSettings.hiveName, tempName);
-                bluetoothManager.saveBluetoothSettings();
-                editing = false;
-            }
-            
-        } else if (bluetoothMenuItem == 6) { // Location
-            static bool textEditing = false;
-            static char tempLocation[24];
-            
-            if (!textEditing) {
-                strcpy(tempLocation, btSettings.location);
-                textEditing = true;
-            }
-            
-            handleTextEdit(tempLocation, sizeof(tempLocation), "Location", display, textEditing);
-            
-            if (!textEditing) {
-                strcpy(btSettings.location, tempLocation);
-                bluetoothManager.saveBluetoothSettings();
-                editing = false;
-            }
-            
-        } else if (bluetoothMenuItem == 7) { // Beekeeper
-            static bool textEditing = false;
-            static char tempBeekeeper[16];
-            
-            if (!textEditing) {
-                strcpy(tempBeekeeper, btSettings.beekeeper);
-                textEditing = true;
-            }
-            
-            handleTextEdit(tempBeekeeper, sizeof(tempBeekeeper), "Beekeeper", display, textEditing);
-            
-            if (!textEditing) {
-                strcpy(btSettings.beekeeper, tempBeekeeper);
-                bluetoothManager.saveBluetoothSettings();
-                editing = false;
-            }
-        }
-        
-        if (wasButtonPressed(3)) { // BACK - Cancel
-            editing = false;
-        }
-    }
-}

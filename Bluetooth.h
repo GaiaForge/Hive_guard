@@ -34,9 +34,9 @@
 
 enum BluetoothMode {
     BT_MODE_OFF = 0,        // Bluetooth disabled
+    BT_MODE_ON = 1,
     BT_MODE_MANUAL = 1,     // Manual button activation only
-    BT_MODE_SCHEDULED = 2,  // Scheduled hours (e.g., 7AM-6PM)
-    BT_MODE_ALWAYS_ON = 3   // Always discoverable
+    
 };
 
 enum BluetoothStatus {
@@ -84,20 +84,13 @@ enum BluetoothResponse {
 // =============================================================================
 
 struct BluetoothSettings {
-    BluetoothMode mode;
-    uint8_t manualTimeoutMin;    // Manual mode timeout (15, 30, 60 minutes)
-    uint8_t scheduleStartHour;   // Schedule start hour (0-23)
-    uint8_t scheduleEndHour;     // Schedule end hour (0-23)
-    bool lowPowerMode;           // Reduce advertising frequency
-    uint8_t deviceId;            // Device identifier (0-255)
-    char hiveName[16];           // Custom hive name (e.g., "TopBar_A1", "Village_03")
-    char location[24];           // Location description (e.g., "Acacia_Tree_North")
-    char beekeeper[16];          // Beekeeper name (e.g., "John_K")
+    bool enabled;                // Simple on/off
+    uint8_t deviceId;            // Device identifier (1-255) 
+    uint8_t timeoutMin;          // Timeout period (same as display timeout)
 };
 
 struct BluetoothState {
     BluetoothStatus status;
-    unsigned long manualStartTime;
     unsigned long lastConnectionTime;
     unsigned long totalConnections;
     unsigned long totalDataTransferred;
@@ -139,8 +132,7 @@ private:
     
     // Internal timing
     unsigned long lastUpdate;
-    unsigned long scheduleCheckTime;
-    
+        
     // Internal methods
     void setupBLEService();
     
@@ -156,9 +148,7 @@ private:
     void deleteFile(const char* filename);
     void sendFileInfo(const char* filename);
     void setDateTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute);
-    void startAudioCalibration(uint8_t durationSeconds);
-    
-    
+    void startAudioCalibration(uint8_t durationSeconds);        
     void updateAdvertising();
     
 public:
@@ -170,14 +160,13 @@ public:
     void saveBluetoothSettings();
     
     // Core Bluetooth management
-    void update();
-    void handleManualActivation();  // Called when button pressed
+    void update();    
+    void setEnabled(bool enabled);
     
     // Mode management
     void setMode(BluetoothMode mode);
-    BluetoothMode getMode() const;
-    void setSchedule(uint8_t startHour, uint8_t endHour);
-    void setManualTimeout(uint8_t minutes);
+    BluetoothMode getMode() const;    
+    
     
     // Status and control
     BluetoothStatus getStatus() const;

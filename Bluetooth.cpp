@@ -38,20 +38,13 @@ BluetoothManager::BluetoothManager()
       statusCharacteristic(BT_STATUS_CHAR_UUID)
 #endif
 {
-    // Initialize settings - DEFAULT TO ALWAYS ON FOR TESTING
-    settings.mode = BT_MODE_ALWAYS_ON;  // Changed from BT_MODE_MANUAL
-    settings.manualTimeoutMin = BT_MANUAL_TIMEOUT_DEFAULT;
-    settings.scheduleStartHour = 7;   // 7 AM
-    settings.scheduleEndHour = 18;    // 6 PM
-    settings.lowPowerMode = false;    // Full power for testing
-    settings.deviceId = 1;
-    strcpy(settings.hiveName, "HiveTest");         // Testing name
-    strcpy(settings.location, "DevLab");           // Development location  
-    strcpy(settings.beekeeper, "Developer");       // Developer name
+     // Initialize simplified settings
+    settings.enabled = true;          // Default enabled for testing
+    settings.deviceId = 1;            // Default device ID
+    settings.timeoutMin = 2;          // Default 2 minutes (same as display)
     
     // Initialize state
-    state.status = BT_STATUS_OFF;
-    state.manualStartTime = 0;
+    state.status = BT_STATUS_OFF;    
     state.lastConnectionTime = 0;
     state.totalConnections = 0;
     state.totalDataTransferred = 0;
@@ -59,9 +52,8 @@ BluetoothManager::BluetoothManager()
     state.connectedDeviceName[0] = '\0';
     state.currentTransferProgress = 0;
     state.currentTransferTotal = 0;
-    
     lastUpdate = 0;
-    scheduleCheckTime = 0;
+    
     systemStatus = nullptr;
     systemSettings = nullptr;
     
@@ -92,7 +84,7 @@ void BluetoothManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSe
     Serial.print(F("Bluetooth initialized as: "));
     Serial.println(deviceName);
     Serial.print(F("Mode: "));
-    Serial.println(bluetoothModeToString(settings.mode));
+    Serial.println(settings.enabled ? "Enabled" : "Disabled");
     
     // ADD THIS DEBUG CHECK
     Serial.println(F("=== BLE SERVICE DEBUG ==="));
@@ -159,54 +151,11 @@ void BluetoothManager::update() {
     if (currentTime - lastUpdate < 1000) return;
     lastUpdate = currentTime;
     
-    // Handle different modes
-    switch (settings.mode) {
-        case BT_MODE_OFF:
-            if (state.status != BT_STATUS_OFF) {
-                stopAdvertising();
-            }
-            break;
-            
-        case BT_MODE_MANUAL:
-            // Check if manual timeout has expired
-            if (state.status == BT_STATUS_ADVERTISING && state.manualStartTime > 0) {
-                unsigned long elapsed = (currentTime - state.manualStartTime) / 60000; // Convert to minutes
-                if (elapsed >= settings.manualTimeoutMin) {
-                    Serial.println(F("Manual Bluetooth timeout - stopping advertising"));
-                    stopAdvertising();
-                    state.manualStartTime = 0;
-                }
-            }
-            break;
-            
-        case BT_MODE_SCHEDULED:
-            // Check schedule every minute
-            if (currentTime - scheduleCheckTime >= 60000) {
-                scheduleCheckTime = currentTime;
-                
-                if (systemStatus && systemStatus->rtcWorking) {
-                    // Get current hour from RTC
-                    extern RTC_PCF8523 rtc;
-                    DateTime now = rtc.now();
-                    
-                    bool shouldBeOn = isInScheduledHours(now.hour());
-                    
-                    if (shouldBeOn && state.status == BT_STATUS_OFF) {
-                        Serial.println(F("Scheduled Bluetooth start"));
-                        startAdvertising();
-                    } else if (!shouldBeOn && state.status == BT_STATUS_ADVERTISING) {
-                        Serial.println(F("Scheduled Bluetooth stop"));
-                        stopAdvertising();
-                    }
-                }
-            }
-            break;
-            
-        case BT_MODE_ALWAYS_ON:
-            if (state.status == BT_STATUS_OFF) {
-                startAdvertising();
-            }
-            break;
+    // Simple logic: if enabled and not advertising, start advertising
+    if (settings.enabled && state.status == BT_STATUS_OFF) {
+        startAdvertising();
+    } else if (!settings.enabled && state.status != BT_STATUS_OFF) {
+        stopAdvertising();
     }
     
     // Update advertising parameters based on power mode
@@ -214,7 +163,7 @@ void BluetoothManager::update() {
 }
 
 BluetoothMode BluetoothManager::getMode() const {
-    return settings.mode;
+    return settings.enabled ? BT_MODE_ON : BT_MODE_OFF;
 }
 
 void BluetoothManager::forceDisconnect() {
@@ -235,20 +184,6 @@ void BluetoothManager::resetStatistics() {
 }
 
 
-void BluetoothManager::handleManualActivation() {
-    if (settings.mode == BT_MODE_OFF) {
-        Serial.println(F("Bluetooth is disabled"));
-        return;
-    }
-    
-    // Manual activation works in any mode
-    Serial.print(F("Manual Bluetooth activation for "));
-    Serial.print(settings.manualTimeoutMin);
-    Serial.println(F(" minutes"));
-    
-    state.manualStartTime = millis();
-    startAdvertising();
-}
 
 void BluetoothManager::startAdvertising() {
 #if 1
@@ -268,13 +203,9 @@ void BluetoothManager::startAdvertising() {
     // Add the service BEFORE the name (order matters!)
     Bluefruit.Advertising.addService(dataService);
     Bluefruit.Advertising.addName();
-    
-    // Set advertising parameters
-    if (settings.lowPowerMode) {
-        Bluefruit.Advertising.setInterval(2000, 5000);
-    } else {
-        Bluefruit.Advertising.setInterval(32, 244);
-    }
+        
+    // Simple advertising interval
+    Bluefruit.Advertising.setInterval(32, 244);
     
     Bluefruit.Advertising.setFastTimeout(30);
     Bluefruit.Advertising.start(0);
@@ -319,8 +250,8 @@ void BluetoothManager::updateAdvertising() {
         Bluefruit.Advertising.setInterval(5000, 10000);  // Very slow advertising
     } else if (batteryLevel < 50) {
         Bluefruit.Advertising.setInterval(2000, 5000);   // Slow advertising
-    } else if (settings.lowPowerMode) {
-        Bluefruit.Advertising.setInterval(1000, 3000);   // Normal slow advertising
+    } else {
+    Bluefruit.Advertising.setInterval(1000, 3000);   // Normal advertising
     }
 #endif
 }
@@ -809,29 +740,23 @@ void BluetoothManager::sendDeviceInfo() {
     char deviceInfo[BT_CHUNK_SIZE];
     
     snprintf(deviceInfo, sizeof(deviceInfo),
-        "{"
-        "\"device\":\"%s\","
-        "\"hiveName\":\"%s\","
-        "\"location\":\"%s\","
-        "\"beekeeper\":\"%s\","
-        "\"deviceId\":%d,"
-        "\"firmware\":\"v2.0\","
-        "\"uptime\":%lu,"
-        "\"btMode\":\"%s\","
-        "\"btConnections\":%lu,"
-        "\"freeMemory\":%d,"
-        "\"sdCard\":%s"
-        "}",
-        getDeviceName().c_str(),
-        settings.hiveName,
-        settings.location,
-        settings.beekeeper,
-        settings.deviceId,
-        millis() / 1000,
-        bluetoothModeToString(settings.mode),
-        state.totalConnections,
-        getFreeMemory(),
-        (systemStatus && systemStatus->sdWorking) ? "true" : "false"
+    "{"
+    "\"device\":\"%s\","
+    "\"deviceId\":%d,"
+    "\"firmware\":\"v2.0\","
+    "\"uptime\":%lu,"
+    "\"btEnabled\":%s,"
+    "\"btConnections\":%lu,"
+    "\"freeMemory\":%d,"
+    "\"sdCard\":%s"
+    "}",
+    getDeviceName().c_str(),
+    settings.deviceId,
+    millis() / 1000,
+    settings.enabled ? "true" : "false",
+    state.totalConnections,
+    getFreeMemory(),
+    (systemStatus && systemStatus->sdWorking) ? "true" : "false"
     );
     
     sendResponse(BT_RESP_OK, (uint8_t*)deviceInfo, strlen(deviceInfo));
@@ -977,89 +902,34 @@ void BluetoothManager::sendAlerts() {
 // MODE AND SETTINGS MANAGEMENT
 // =============================================================================
 
-void BluetoothManager::setMode(BluetoothMode mode) {
-    if (settings.mode == mode) return;
+void BluetoothManager::setEnabled(bool enabled) {
+    if (settings.enabled == enabled) return;
     
-    Serial.print(F("Bluetooth mode: "));
-    Serial.print(bluetoothModeToString(settings.mode));
+    Serial.print(F("Bluetooth: "));
+    Serial.print(settings.enabled ? "ON" : "OFF");
     Serial.print(F(" -> "));
-    Serial.println(bluetoothModeToString(mode));
+    Serial.println(enabled ? "ON" : "OFF");
     
     // Stop current operation
     if (state.status != BT_STATUS_OFF) {
         stopAdvertising();
     }
     
-    settings.mode = mode;
+    settings.enabled = enabled;
     saveBluetoothSettings();
     
-    // Start new mode if appropriate
-    if (shouldBeDiscoverable()) {
+    // Start if enabled
+    if (enabled) {
         startAdvertising();
     }
 }
 
-void BluetoothManager::setSchedule(uint8_t startHour, uint8_t endHour) {
-    if (startHour > 23) startHour = 23;
-    if (endHour > 23) endHour = 23;
-    
-    settings.scheduleStartHour = startHour;
-    settings.scheduleEndHour = endHour;
-    saveBluetoothSettings();
-    
-    Serial.print(F("Bluetooth schedule: "));
-    Serial.print(startHour);
-    Serial.print(F(":00 - "));
-    Serial.print(endHour);
-    Serial.println(F(":00"));
-}
-
-void BluetoothManager::setManualTimeout(uint8_t minutes) {
-    if (minutes < 5) minutes = 5;
-    if (minutes > 120) minutes = 120;
-    
-    settings.manualTimeoutMin = minutes;
-    saveBluetoothSettings();
-    
-    Serial.print(F("Manual timeout set to "));
-    Serial.print(minutes);
-    Serial.println(F(" minutes"));
-}
-
-bool BluetoothManager::isInScheduledHours(uint8_t currentHour) const {
-    if (settings.scheduleStartHour <= settings.scheduleEndHour) {
-        // Normal case: 7:00 - 18:00
-        return (currentHour >= settings.scheduleStartHour && currentHour < settings.scheduleEndHour);
-    } else {
-        // Overnight case: 22:00 - 06:00
-        return (currentHour >= settings.scheduleStartHour || currentHour < settings.scheduleEndHour);
-    }
-}
 
 bool BluetoothManager::shouldBeDiscoverable() const {
-    switch (settings.mode) {
-        case BT_MODE_OFF:
-            return false;
-            
-        case BT_MODE_MANUAL:
-            return (state.manualStartTime > 0 && 
-                   (millis() - state.manualStartTime) < (settings.manualTimeoutMin * 60000UL));
-            
-        case BT_MODE_SCHEDULED:
-            if (systemStatus && systemStatus->rtcWorking) {
-                extern RTC_PCF8523 rtc;
-                DateTime now = rtc.now();
-                return isInScheduledHours(now.hour());
-            }
-            return false;
-            
-        case BT_MODE_ALWAYS_ON:
-            return true;
-            
-        default:
-            return false;
-    }
+    // Simple logic: enabled = discoverable
+    return settings.enabled;
 }
+
 
 // =============================================================================
 // SETTINGS PERSISTENCE
@@ -1093,49 +963,23 @@ bool BluetoothManager::isConnected() const {
 }
 
 unsigned long BluetoothManager::getTimeRemaining() const {
-    if (settings.mode != BT_MODE_MANUAL || state.manualStartTime == 0) {
-        return 0;
-    }
-    
-    unsigned long elapsed = millis() - state.manualStartTime;
-    unsigned long timeout = settings.manualTimeoutMin * 60000UL;
-    
-    if (elapsed >= timeout) return 0;
-    return timeout - elapsed;
+    // For simplified system, no timeout - always return 0
+    return 0;
 }
 
 String BluetoothManager::getDeviceName() const {
-    // Create device name from hive name and device ID
-    // Format: "HiveName_ID" (e.g., "TopBar_A1_01", "Village_03_12")
-    String deviceName = String(settings.hiveName) + "_" + String(settings.deviceId, DEC);
-    
-    // Ensure it fits in BLE name limit (usually 20-30 chars)
-    if (deviceName.length() > 20) {
-        deviceName = deviceName.substring(0, 20);
-    }
-    
-    return deviceName;
+    // Simple format: "HiveGuard_1", "HiveGuard_2", etc.
+    return "HiveGuard_" + String(settings.deviceId);
 }
 
 void BluetoothManager::printBluetoothStatus() const {
     Serial.println(F("\n=== Bluetooth Status ==="));
     Serial.print(F("Device: ")); Serial.println(getDeviceName());
-    Serial.print(F("Mode: ")); Serial.println(bluetoothModeToString(settings.mode));
+    Serial.print(F("Enabled: ")); Serial.println(settings.enabled ? "Yes" : "No");
     Serial.print(F("Status: ")); Serial.println(bluetoothStatusToString(state.status));
     Serial.print(F("Connected: ")); Serial.println(state.clientConnected ? "Yes" : "No");
     Serial.print(F("Total Connections: ")); Serial.println(state.totalConnections);
     Serial.print(F("Data Transferred: ")); Serial.print(state.totalDataTransferred); Serial.println(F(" bytes"));
-    
-    if (settings.mode == BT_MODE_MANUAL && state.manualStartTime > 0) {
-        unsigned long remaining = getTimeRemaining();
-        Serial.print(F("Time Remaining: ")); Serial.print(remaining / 60000); Serial.println(F(" minutes"));
-    }
-    
-    if (settings.mode == BT_MODE_SCHEDULED) {
-        Serial.print(F("Schedule: ")); Serial.print(settings.scheduleStartHour);
-        Serial.print(F(":00 - ")); Serial.print(settings.scheduleEndHour); Serial.println(F(":00"));
-    }
-    
     Serial.println(F("=======================\n"));
 }
 
@@ -1179,9 +1023,7 @@ void bluetoothCommandCallback(uint16_t conn_hdl, BLECharacteristic* chr, uint8_t
 const char* bluetoothModeToString(BluetoothMode mode) {
     switch (mode) {
         case BT_MODE_OFF: return "Off";
-        case BT_MODE_MANUAL: return "Manual";
-        case BT_MODE_SCHEDULED: return "Scheduled";
-        case BT_MODE_ALWAYS_ON: return "Always On";
+        case BT_MODE_ON: return "On";
         default: return "Unknown";
     }
 }
@@ -1209,18 +1051,6 @@ String formatDataSize(uint32_t bytes) {
 
 #else
 
-// Stub implementation for non-nRF52 platforms
-BluetoothManager::BluetoothManager() {
-    Serial.println(F("Bluetooth not supported on this platform"));
-}
 
-void BluetoothManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSettings) {
-    Serial.println(F("Bluetooth initialization skipped - not supported"));
-}
-
-void BluetoothManager::update() {}
-void BluetoothManager::handleManualActivation() {
-    Serial.println(F("Bluetooth not available"));
-}
 
 #endif // NRF52_SERIES

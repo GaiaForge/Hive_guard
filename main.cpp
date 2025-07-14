@@ -1,6 +1,6 @@
 /**
- * main.cpp - PHASE 3a: Settings Persistence Fix
- * Tanzania Hive Monitor System - Fixed Settings Storage + Reverted Display Timeout
+ * main.cpp 
+ * HiveGuard Hive Monitor System V1.0 - Fixed Settings Storage + Reverted Display Timeout
  */
 
 #include "Config.h"
@@ -15,11 +15,13 @@
 #include "Utils.h"
 #include "PowerManager.h"
 #include "FieldModeBuffer.h"
+#include "Bluetooth.h"
 
 // Hardware objects
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_BME280 bme;
 RTC_PCF8523 rtc;
+BluetoothManager bluetoothManager;
 
 // System data
 SystemSettings settings;
@@ -32,36 +34,12 @@ MenuState menuState = {false, 0, 0, 0, 0.0, 0};
 SpectralFeatures currentSpectralFeatures = {0};
 ActivityTrend currentActivityTrend = {0};
 
-// PHASE 3a: Power Manager and Field Buffer
+// : Power Manager and Field Buffer
 PowerManager powerManager;
 extern FieldModeBufferManager fieldBuffer; // Defined in FieldModeBuffer.cpp
 
-// Dummy objects for Menu.cpp compatibility (keeping these for now)
-struct DummyBluetoothManager {
-    struct DummySettings {
-        int mode = 0;
-        int manualTimeoutMin = 30;
-        int scheduleStartHour = 7;
-        int scheduleEndHour = 18;
-        int deviceId = 1;
-        char hiveName[16] = "Test";
-        char location[24] = "Lab";
-        char beekeeper[16] = "User";
-    } settings;
-    
-    int getStatus() const { return 0; }
-    DummySettings& getSettings() { return settings; }
-    void setMode(int mode) {}
-    void setSchedule(uint8_t start, uint8_t end) {}
-    void setManualTimeout(uint8_t minutes) {}
-    void saveBluetoothSettings() {}
-} bluetoothManager;
 
-// Helper functions Menu.cpp expects
-const char* bluetoothModeToString(int mode) { return "Off"; }
-const char* bluetoothStatusToString(int status) { return "Off"; }
-
-// PHASE 3a: Function declarations for field mode functions
+// Function declarations for field mode functions
 void handleFieldModeTransitions();
 void handleFieldModeOperation(unsigned long currentTime);
 void handleTestingModeOperation(unsigned long currentTime);
@@ -73,7 +51,7 @@ unsigned long lastLogTime = 0;
 unsigned long lastDisplayUpdate = 0;
 unsigned long lastPowerUpdate = 0;
 
-// PHASE 3a: Field mode state tracking
+// Field mode state tracking
 bool wasInFieldMode = false;
 unsigned long fieldModeStartTime = 0;
 unsigned long lastFieldModeCheck = 0;
@@ -81,15 +59,14 @@ unsigned long lastFieldModeCheck = 0;
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    Serial.println(F("=== Tanzania Hive Monitor v2.1 - PHASE 3a: SETTINGS PERSISTENCE FIX ==="));
+    Serial.println(F("=== HiveGuard Hive Monitor v1.0 - : Display Power Control Integrated==="));
     
     // Initialize I2C and SPI first
     Wire.begin();
     Wire.setClock(100000);
     SPI.begin();
 
-    initializeDisplayPower();  // Set pin 12 as output and turn on display
-
+    
     // Initialize display
     if (display.begin(SCREEN_ADDRESS, true)) {
         systemStatus.displayWorking = true;
@@ -110,10 +87,10 @@ void setup() {
         Serial.println(F("FAILED - settings will not persist!"));
     }
     
-    // PHASE 3a: Load settings from SD card
+    // : Load settings from SD card
     Serial.println(F("Loading settings..."));
     loadSettings(settings);
-    printSettingsInfo(settings); // PHASE 3a: Show settings info at startup
+    printSettingsInfo(settings); // : Show settings info at startup
     
     // Initialize display
     if (display.begin(SCREEN_ADDRESS, true)) {
@@ -175,12 +152,20 @@ void setup() {
     pinMode(BTN_BACK, INPUT_PULLUP);
     Serial.println(F("Buttons: OK"));
     
-    // PHASE 3a: Initialize Power Manager with fixed settings
+    // : Initialize Power Manager with fixed settings
     Serial.print(F("Power Manager: "));
     powerManager.initialize(&systemStatus, &settings);
     Serial.println(F("OK - Settings Persistence Fixed"));
+
+    //  Initialize Bluetooth Manager
+    Serial.print(F("Bluetooth Manager: "));
+    bluetoothManager.initialize(&systemStatus, &settings);
+    Serial.println(F("OK"));
     
-    // PHASE 3a: Initialize field buffer
+    // Link PowerManager with BluetoothManager
+    powerManager.setBluetoothManager(&bluetoothManager);
+    
+    // : Initialize field buffer
     Serial.println(F("Field Buffer: Initialized"));
     fieldBuffer.clearBuffer();
     
@@ -191,7 +176,7 @@ void setup() {
     readAllSensors(bme, currentData, settings, systemStatus);
     checkAlerts(currentData, settings, systemStatus);
     
-    // PHASE 3a: Set initial wake time for field mode
+    // : Set initial wake time for field mode
     if (systemStatus.rtcWorking) {
         powerManager.updateNextWakeTime(settings.logInterval);
     }
@@ -200,7 +185,7 @@ void setup() {
     updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
                   currentSpectralFeatures, currentActivityTrend);
     
-    // PHASE 3a: Show initial power status with settings info
+    // : Show initial power status with settings info
     Serial.println(F("\n=== Initial Power Status ==="));
     powerManager.printPowerStatus();
     Serial.print(F("Field Mode from Settings: "));
@@ -209,7 +194,7 @@ void setup() {
     Serial.print(settings.displayTimeoutMin);
     Serial.println(F(" minutes"));
     
-    // PHASE 3a: Export settings for backup/verification
+    // : Export settings for backup/verification
     if (systemStatus.sdWorking) {
         exportSettingsToSD(settings);
         Serial.println(F("Settings exported for verification"));
@@ -221,8 +206,15 @@ void loop() {
     
     // Update button states - ALWAYS FIRST (unchanged)
     updateButtonStates();
+
+    // Check for Bluetooth button press (highest priority in field mode)
+    if (wasBluetoothButtonPressed()) {
+        Serial.println(F("BLUETOOTH BUTTON pressed"));
+        powerManager.handleBluetoothButtonPress();
+        resetButtonStates(); // Clear other button states to prevent conflicts
+    }
     
-    // PHASE 3a: Check for field mode state changes
+    // : Check for field mode state changes
     handleFieldModeTransitions();
     
     // Handle settings menu (highest priority) - UNCHANGED
@@ -230,8 +222,11 @@ void loop() {
         handleSettingsMenu(display, menuState, settings, rtc, currentData, systemStatus);
         return; // Skip everything else when in menu
     }
+
+    // Update Bluetooth manager
+    bluetoothManager.update();
     
-    // PHASE 3a: Field mode operation logic (NO DISPLAY TIMEOUT)
+    // : Field mode operation logic (NO DISPLAY TIMEOUT)
     if (powerManager.isFieldModeActive()) {
         handleFieldModeOperation(currentTime);
         return; // Field mode has its own loop logic
@@ -296,11 +291,11 @@ void loop() {
         lastDisplayUpdate = currentTime;
     }
     
-    // PHASE 3a: Normal (Testing) mode operation
+    // : Normal (Testing) mode operation
     handleTestingModeOperation(currentTime);
 }
 
-// PHASE 3a: Enhanced function to handle field mode transitions
+// : Enhanced function to handle field mode transitions
 void handleFieldModeTransitions() {
     bool fieldModeNow = powerManager.isFieldModeActive();
     
@@ -310,7 +305,7 @@ void handleFieldModeTransitions() {
         Serial.print(F("Log interval: "));
         Serial.print(settings.logInterval);
         Serial.println(F(" minutes"));
-        Serial.println(F("Display stays on - timeout disabled in Phase 3a"));
+        Serial.println(F("Display stays on - timeout disabled in "));
         Serial.println(F("Press any button to see current data"));
         Serial.println(F("Use Settings menu to exit field mode"));
         Serial.println(F("================================\n"));
@@ -340,25 +335,48 @@ void handleFieldModeTransitions() {
     }
 }
 
-// PHASE 3a: Field mode operation logic (REVERTED TO PHASE 2 - NO DISPLAY TIMEOUT)
+// : Field mode operation logic 
 void handleFieldModeOperation(unsigned long currentTime) {
-    // Check for any button press to show current data
-    if (wasButtonPressed(0) || wasButtonPressed(1) || wasButtonPressed(2) || wasButtonPressed(3)) {
-        Serial.println(F("Button pressed in field mode - showing current data"));
-        powerManager.handleUserActivity(); // Track activity but don't change display state
-        
-        // Force immediate display update to show current data
-        updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
-                      currentSpectralFeatures, currentActivityTrend);
-        
-        Serial.println(F("Current data displayed - field mode continues"));
-        resetButtonStates();
-        // Note: Don't return here - continue with field mode operation
+    // Check for long press wake when display is off
+    if (!powerManager.isDisplayOn()) {
+        if (powerManager.checkForLongPressWake()) {
+            resetButtonStates();
+            return; // System is now awake, let next loop handle normal interaction
+        }
+        // When display is off, ignore all other button presses
+        resetButtonStates(); // Clear any normal presses
+    } else {
+        // Display is on - handle normal button presses for navigation/interaction
+        if (wasButtonPressed(0) || wasButtonPressed(1) || wasButtonPressed(2) || wasButtonPressed(3)) {
+            Serial.println(F("Button pressed in field mode - user interaction"));
+            powerManager.handleUserActivity(); // Resets timeout
+            
+            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
+                          currentSpectralFeatures, currentActivityTrend);
+            
+            resetButtonStates();
+            return; // Let main loop handle menu navigation normally
+        }
+    }
+    
+    // Skip sensor readings if display is still on (during countdown period)
+    if (powerManager.isDisplayOn()) {
+        // During countdown: just update display with current (stale) data, no sensor reads
+        if (currentTime - lastDisplayUpdate >= 5000) { // Every 5 seconds
+            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
+                          currentSpectralFeatures, currentActivityTrend);
+            lastDisplayUpdate = currentTime;
+        }
+        return; // Skip all sensor reading logic below
     }
     
     // Check if it's time to take a reading
     if (powerManager.shouldTakeReading()) {
-        Serial.println(F("\n--- Field Mode: Taking Reading ---"));
+        Serial.println(F("\n--- Field Mode: Taking Scheduled Reading ---"));
+        
+        // Power up sensors for this reading
+        powerManager.powerUpSensors();
+        delay(100); // Small delay for sensors to stabilize
         
         // Read all sensors
         readAllSensors(bme, currentData, settings, systemStatus);
@@ -418,6 +436,11 @@ void handleFieldModeOperation(unsigned long currentTime) {
         Serial.print(settings.logInterval);
         Serial.println(F(" minutes"));
         Serial.println(F("--------------------------------\n"));
+
+        // Power down sensors again until next reading
+        powerManager.powerDownSensors();
+        powerManager.powerDownAudio();
+        Serial.println(F("Sensors powered down until next reading"));
     }
   
     // Update display regularly in field mode (display always on)
@@ -428,7 +451,7 @@ void handleFieldModeOperation(unsigned long currentTime) {
     }
 }
 
-// PHASE 3a: Testing mode operation (normal operation) - Enhanced
+// : Testing mode operation (normal operation) - Enhanced
 void handleTestingModeOperation(unsigned long currentTime) {
     // Read sensors every 5 seconds - UNCHANGED
     if (currentTime - lastSensorRead >= 5000) {
@@ -447,7 +470,7 @@ void handleTestingModeOperation(unsigned long currentTime) {
         Serial.println(F("V"));
     }
     
-    // PHASE 3a: Update Power Manager every 5 seconds
+    // : Update Power Manager every 5 seconds
     if (currentTime - lastPowerUpdate >= 5000) {
         powerManager.updatePowerMode(currentData.batteryVoltage);
         lastPowerUpdate = currentTime;
@@ -528,7 +551,8 @@ void handleTestingModeOperation(unsigned long currentTime) {
     }
 }
 
-// PHASE 3a: Field sleep implementation (REVERTED TO PHASE 2)
+
+// : Field sleep implementation 
 void enterFieldSleep() {
     Serial.print(F("Field sleep for "));
     Serial.print(settings.logInterval);

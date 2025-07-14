@@ -32,11 +32,14 @@
 // Battery monitoring
 #define VBATPIN A6
 
-// Buttons
+// Navigation Buttons
 #define BTN_UP    5
 #define BTN_DOWN  6
 #define BTN_SELECT 9
 #define BTN_BACK  11
+
+// External Bluetooth Button
+#define BTN_BLUETOOTH 13  // NEW: External button for Bluetooth activation in field mode
 
 // =============================================================================
 // DISPLAY POWER CONTROL
@@ -159,7 +162,7 @@ const unsigned long DEBOUNCE_DELAY = 50;       // 50ms
 #define AFRICAN_EVENING_END 18       // Earlier end due to predators
 
 // =============================================================================
-// TanzaniaN TOP BAR HIVE SPECIFICS
+// TANZANIAN TOP BAR HIVE SPECIFICS
 // =============================================================================
 
 // Different thermal dynamics than Langstroth
