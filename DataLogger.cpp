@@ -187,7 +187,7 @@ void flushBufferedData(RTC_PCF8523& rtc, SystemSettings& settings, SystemStatus&
         Serial.println(F("Data remains in buffer due to write failure."));
     }
 }
-    
+ 
   
 
 // =============================================================================

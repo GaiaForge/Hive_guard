@@ -292,19 +292,25 @@ void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data,
     display.println(F("Sound Monitor"));
     display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
-    // Centroid frequency (more meaningful than zero-crossing)
-    display.setCursor(0, 16);
+    // Centroid frequency
+    display.setCursor(0, 15);
     display.print(F("Centroid: "));
     display.print((int)features.spectralCentroid);
     display.print(F(" Hz"));
     
-    // Sound level with visual bar (keep existing function)
-    display.setCursor(0, 28);
-    display.print(F("Level:"));
-    drawSoundLevelBar(display, 45, 26, 80, 10, data.soundLevel);
+    // Peak frequency (dominant frequency from FFT)
+    display.setCursor(0, 25);
+    display.print(F("Peak: "));
+    display.print(data.dominantFreq);
+    display.print(F(" Hz"));
     
-    // Baseline comparison (very useful for beekeepers)
-    display.setCursor(0, 40);
+    // Sound level with visual bar
+    display.setCursor(0, 35);
+    display.print(F("Level:"));
+    drawSoundLevelBar(display, 36, 36, 65, 8, data.soundLevel);
+    
+    // Baseline comparison
+    display.setCursor(0, 46);
     display.print(F("Baseline: "));
     display.print((int)trend.baselineActivity);
     display.print(F("% ("));
@@ -314,8 +320,8 @@ void drawSoundScreen(Adafruit_SH1106G& display, SensorData& data,
     display.print(change);
     display.print(F("%)"));
     
-    // Pattern status (key insight for beekeepers)
-    display.setCursor(0, 52);
+    // Pattern status
+    display.setCursor(0, 56);
     display.print(F("Pattern: "));
     if(trend.abnormalTiming) {
         display.print(F("ABNORMAL"));

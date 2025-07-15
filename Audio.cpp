@@ -1,6 +1,6 @@
 /**
  * Audio.cpp
- * Audio processing implementation - Hybrid approach with real-time display and FFT analysis
+ * Modern Audio processing implementation - Clean AudioProcessor-only version
  */
 
 #include "Audio.h"
@@ -8,15 +8,10 @@
 #include <math.h>
 
 // =============================================================================
-// GLOBAL INSTANCES AND LEGACY SUPPORT
+// GLOBAL AUDIO PROCESSOR INSTANCE
 // =============================================================================
 
-// Global audio processor instance
 AudioProcessor audioProcessor;
-
-// Legacy global buffers for compatibility
-int audioBuffer[AUDIO_SAMPLE_BUFFER_SIZE];
-volatile int audioSampleIndex = 0;
 
 // =============================================================================
 // AUDIO PROCESSOR IMPLEMENTATION
@@ -107,13 +102,16 @@ bool AudioProcessor::detectMicrophone() {
 // =============================================================================
 
 void AudioProcessor::addSample(int rawSample) {
-    // Add to FFT buffer (with DC offset removal)
+    // Convert to centered float sample
+    float sample = (float)(rawSample - 2048);
+    
+    // Add to FFT buffer
     if (bufferIndex < FFT_SIZE) {
-        audioBuffer[bufferIndex++] = (float)(rawSample - 2048);
+        audioBuffer[bufferIndex++] = sample;
     }
     
     // Add to real-time buffer (circular)
-    realtimeBuffer[realtimeIndex] = (float)(rawSample - 2048);
+    realtimeBuffer[realtimeIndex] = sample;
     realtimeIndex = (realtimeIndex + 1) % DISPLAY_UPDATE_SAMPLES;
 }
 
@@ -170,7 +168,6 @@ void AudioProcessor::updateDisplayData() {
     }
     
     // Copy latest classification data
-    displayData.beeState = displayData.beeState; // Keep previous state
     displayData.abscondingRisk = abscondingIndicators.riskLevel;
 }
 
@@ -184,6 +181,10 @@ AudioAnalysisResult AudioProcessor::performFullAnalysis() {
     // Check if we have enough data
     if (bufferIndex < FFT_SIZE / 2) {
         result.analysisValid = false;
+        Serial.print(F("Not enough samples for FFT: "));
+        Serial.print(bufferIndex);
+        Serial.print(F("/"));
+        Serial.println(FFT_SIZE);
         return result;
     }
     
@@ -241,6 +242,9 @@ AudioAnalysisResult AudioProcessor::performFullAnalysis() {
     // Update display data with full analysis results
     displayData.beeState = beeState;
     displayData.abscondingRisk = abscondingIndicators.riskLevel;
+    displayData.spectralCentroid = analysis.spectralCentroid;
+    displayData.dominantFreq = analysis.dominantFreq;
+    displayData.soundLevel = analysis.soundLevel;
     
     // Save current magnitude for next spectral flux calculation
     for (int i = 0; i < FFT_SIZE/2; i++) {
@@ -249,6 +253,14 @@ AudioAnalysisResult AudioProcessor::performFullAnalysis() {
     
     // Reset buffer for next analysis
     bufferIndex = 0;
+    
+    Serial.print(F("FFT Analysis complete: Freq="));
+    Serial.print(result.dominantFreq);
+    Serial.print(F("Hz, Centroid="));
+    Serial.print(result.spectralCentroid, 1);
+    Serial.print(F("Hz, Level="));
+    Serial.print(result.soundLevel);
+    Serial.println(F("%"));
     
     return result;
 }
@@ -260,7 +272,11 @@ AudioAnalysisResult AudioProcessor::performFullAnalysis() {
 void AudioProcessor::performFFT() {
     // Copy audio buffer to FFT arrays
     for (int i = 0; i < FFT_SIZE; i++) {
-        fftReal[i] = audioBuffer[i];
+        if (i < bufferIndex) {
+            fftReal[i] = audioBuffer[i];
+        } else {
+            fftReal[i] = 0; // Zero-pad if needed
+        }
         fftImag[i] = 0;
     }
     
@@ -658,356 +674,6 @@ void AudioProcessor::printStatus() const {
 }
 
 // =============================================================================
-// LEGACY FUNCTION IMPLEMENTATIONS
-// =============================================================================
-
-void initializeAudio(SystemStatus& status) {
-    // Initialize the global audio processor
-    audioProcessor.initialize(nullptr, &status);
-}
-
-void processAudio(SensorData& data, SystemSettings& settings) {
-    static unsigned long lastSampleTime = 0;
-    unsigned long currentTime = millis();
-    
-    // Sample collection
-    if (currentTime - lastSampleTime >= 1) {
-        int audioSample = analogRead(AUDIO_INPUT_PIN);
-        
-        // Add to processor
-        audioProcessor.addSample(audioSample);
-        
-        // Legacy buffer support
-        if (audioSampleIndex < AUDIO_SAMPLE_BUFFER_SIZE) {
-            audioBuffer[audioSampleIndex++] = audioSample;
-        }
-        
-        lastSampleTime = currentTime;
-    }
-    
-    // Update display data frequently
-    static unsigned long lastDisplayUpdate = 0;
-    if (currentTime - lastDisplayUpdate >= 100) {
-        audioProcessor.updateDisplayData();
-        
-        // Copy to legacy data structure
-        AudioDisplayData displayData = audioProcessor.getDisplayData();
-        data.dominantFreq = (uint16_t)displayData.dominantFreq;
-        data.soundLevel = (uint8_t)displayData.soundLevel;
-        data.beeState = displayData.beeState;
-        
-        lastDisplayUpdate = currentTime;
-    }
-}
-
-AudioAnalysis analyzeAudioBuffer() {
-    AudioAnalysis result = {0};
-    
-    // Use global buffer
-    if (audioSampleIndex < 32) {
-        return result;
-    }
-    
-    // Simple time-domain analysis for legacy support
-    int zeroCrossings = 0;
-    int lastSign = 0;
-    long sumAmplitude = 0;
-    int maxAmplitude = 0;
-    int minAmplitude = 4095;
-    
-    long dcOffset = 0;
-    for (int i = 0; i < audioSampleIndex; i++) {
-        dcOffset += audioBuffer[i];
-    }
-    dcOffset /= audioSampleIndex;
-    
-    for (int i = 1; i < audioSampleIndex; i++) {
-        int centeredSample = audioBuffer[i] - dcOffset;
-        int amplitude = abs(centeredSample);
-        
-        sumAmplitude += amplitude;
-        if (amplitude > maxAmplitude) maxAmplitude = amplitude;
-        if (amplitude < minAmplitude) minAmplitude = amplitude;
-        
-        int currentSign = (centeredSample >= 0) ? 1 : -1;
-        if (lastSign != 0 && currentSign != lastSign) {
-            zeroCrossings++;
-        }
-        lastSign = currentSign;
-    }
-    
-    float duration = (float)audioSampleIndex / AUDIO_SAMPLE_RATE;
-    if (duration > 0 && zeroCrossings > 0) {
-        result.dominantFreq = (zeroCrossings / 2.0) / duration;
-        result.dominantFreq = constrain(result.dominantFreq, 50, 1000);
-    }
-    
-    float avgAmplitude = (float)sumAmplitude / audioSampleIndex;
-    int dynamicRange = maxAmplitude - minAmplitude;
-    float normalizedLevel = (avgAmplitude * 0.7) + (dynamicRange * 0.3);
-    result.soundLevel = constrain(map(normalizedLevel, 0, 2048, 0, 100), 0, 100);
-    
-    result.peakToAvg = (avgAmplitude > 0) ? (float)maxAmplitude / avgAmplitude : 0;
-    result.spectralCentroid = estimateSpectralCentroidOptimized();
-    
-    return result;
-}
-
-float estimateSpectralCentroidOptimized() {
-    const int windowSize = 32;
-    const int numWindows = audioSampleIndex / windowSize;
-    
-    if (numWindows < 3) {
-        return 0;
-    }
-    
-    float totalWeightedFreq = 0;
-    float totalEnergy = 0;
-    
-    long dcOffset = 0;
-    for (int i = 0; i < audioSampleIndex; i++) {
-        dcOffset += audioBuffer[i];
-    }
-    dcOffset /= audioSampleIndex;
-    
-    for (int w = 0; w < numWindows; w++) {
-        int windowStart = w * windowSize;
-        int zeroCrossings = 0;
-        float windowEnergy = 0;
-        
-        for (int i = 1; i < windowSize; i++) {
-            int idx = windowStart + i;
-            if (idx >= audioSampleIndex) break;
-            
-            int current = audioBuffer[idx] - dcOffset;
-            int previous = audioBuffer[idx-1] - dcOffset;
-            
-            int currentSign = (current >= 0) ? 1 : -1;
-            int previousSign = (previous >= 0) ? 1 : -1;
-            
-            if (previousSign != currentSign) {
-                zeroCrossings++;
-            }
-            
-            windowEnergy += abs(current);
-        }
-        
-        float windowDuration = (float)windowSize / AUDIO_SAMPLE_RATE;
-        float windowFreq = 0;
-        if (windowDuration > 0 && zeroCrossings > 0) {
-            windowFreq = (zeroCrossings / 2.0) / windowDuration;
-            
-            float freqWeight = 1.0;
-            if (windowFreq >= 200 && windowFreq <= 600) {
-                freqWeight = 2.0;
-            } else if (windowFreq >= 100 && windowFreq <= 800) {
-                freqWeight = 1.5;
-            }
-            
-            windowEnergy *= freqWeight;
-        }
-        
-        if (windowFreq >= 50 && windowFreq <= 1000) {
-            totalWeightedFreq += windowFreq * windowEnergy;
-            totalEnergy += windowEnergy;
-        }
-    }
-    
-    return (totalEnergy > 0) ? totalWeightedFreq / totalEnergy : 0;
-}
-
-uint8_t classifyBeeState(AudioAnalysis& analysis, SystemSettings& settings) {
-    // Simple classification for legacy support
-    uint16_t freq = analysis.dominantFreq;
-    uint8_t level = analysis.soundLevel;
-    float peakRatio = analysis.peakToAvg;
-    
-    if (level < 10) {
-        return BEE_QUIET;
-    }
-    
-    if (freq >= settings.queenFreqMin && freq <= settings.queenFreqMax) {
-        if (peakRatio > 2.5 && level > 30) {
-            return BEE_QUEEN_PRESENT;
-        }
-    }
-    
-    if (freq >= settings.swarmFreqMin && freq <= settings.swarmFreqMax) {
-        if (level > 60 && peakRatio > 3.0) {
-            return BEE_PRE_SWARM;
-        }
-    }
-    
-    if (level > settings.stressThreshold) {
-        if (peakRatio > 4.0 || analysis.spectralCentroid > 500) {
-            return BEE_STRESSED;
-        }
-    }
-    
-    if (freq > 600 && level > 70) {
-        return BEE_DEFENSIVE;
-    }
-    
-    if (level > 50 && (freq < settings.queenFreqMin || freq > settings.queenFreqMax)) {
-        if (analysis.spectralCentroid < 250) {
-            return BEE_QUEEN_MISSING;
-        }
-    }
-    
-    if (level > 50) {
-        return BEE_ACTIVE;
-    } else {
-        return BEE_NORMAL;
-    }
-}
-
-void runAudioDiagnostics(SystemStatus& status) {
-    audioProcessor.runDiagnostics();
-}
-
-void calibrateAudioLevels(SystemSettings& settings, int durationSeconds) {
-    Serial.println(F("Starting audio calibration..."));
-    Serial.println(F("Ensure hive is in normal state"));
-    
-    unsigned long startTime = millis();
-    unsigned long duration = durationSeconds * 1000;
-    
-    float avgFreq = 0;
-    float avgLevel = 0;
-    int sampleCount = 0;
-    
-    while (millis() - startTime < duration) {
-        audioProcessor.updateDisplayData();
-        AudioDisplayData data = audioProcessor.getDisplayData();
-        
-        avgFreq += data.dominantFreq;
-        avgLevel += data.soundLevel;
-        sampleCount++;
-        
-        delay(100);
-    }
-    
-    if (sampleCount > 0) {
-        avgFreq /= sampleCount;
-        avgLevel /= sampleCount;
-        
-        Serial.print(F("Average frequency: "));
-        Serial.print(avgFreq);
-        Serial.println(F(" Hz"));
-        Serial.print(F("Average level: "));
-        Serial.print(avgLevel);
-        Serial.println(F("%"));
-        
-        Serial.println(F("\nSuggested settings:"));
-        Serial.print(F("Queen frequency range: "));
-        Serial.print(avgFreq - 50);
-        Serial.print(F(" - "));
-        Serial.println(avgFreq + 50);
-        Serial.print(F("Stress threshold: "));
-        Serial.println(avgLevel + 30);
-    }
-}
-
-// Legacy functions that need minimal implementation
-SpectralFeatures analyzeAudioFFT() {
-    SpectralFeatures result = {0};
-    AudioDisplayData data = audioProcessor.getDisplayData();
-    result.spectralCentroid = data.spectralCentroid;
-    result.totalEnergy = data.soundLevel / 10.0;
-    return result;
-}
-
-void updateActivityTrend(ActivityTrend& trend, SpectralFeatures& current, uint8_t hour) {
-    trend.currentActivity = current.totalEnergy;
-    if (trend.baselineActivity == 0) {
-        trend.baselineActivity = current.totalEnergy;
-    }
-    trend.activityIncrease = (trend.baselineActivity > 0) ? 
-                             trend.currentActivity / trend.baselineActivity : 1.0;
-}
-
-AbscondingIndicators detectAbscondingRisk(AudioAnalysis& analysis, 
-                                          SystemSettings& settings,
-                                          uint32_t currentTime) {
-    AbscondingIndicators indicators = {0};
-    
-    // Simple implementation for legacy support
-    indicators.queenSilent = (analysis.dominantFreq < settings.queenFreqMin || 
-                             analysis.dominantFreq > settings.queenFreqMax);
-    indicators.increasedActivity = (analysis.soundLevel > 70);
-    indicators.erraticPattern = (analysis.peakToAvg > 4.0);
-    
-    indicators.riskLevel = 0;
-    if (indicators.queenSilent) indicators.riskLevel += 40;
-    if (indicators.increasedActivity) indicators.riskLevel += 30;
-    if (indicators.erraticPattern) indicators.riskLevel += 30;
-    
-    if (indicators.riskLevel > 100) indicators.riskLevel = 100;
-    
-    return indicators;
-}
-
-void updateDailyPattern(DailyPattern& pattern, uint8_t hour, 
-                       uint8_t activity, float temperature) {
-    if (hour >= 24) return;
-    
-    pattern.hourlyActivity[hour] = (pattern.hourlyActivity[hour] + activity) / 2;
-    pattern.hourlyTemperature[hour] = (uint8_t)temperature;
-    
-    uint8_t maxActivity = 0;
-    uint8_t minActivity = 255;
-    for (int i = 0; i < 24; i++) {
-        if (pattern.hourlyActivity[i] > maxActivity) {
-            maxActivity = pattern.hourlyActivity[i];
-            pattern.peakActivityTime = i;
-        }
-        if (pattern.hourlyActivity[i] < minActivity && pattern.hourlyActivity[i] > 0) {
-            minActivity = pattern.hourlyActivity[i];
-            pattern.quietestTime = i;
-        }
-    }
-    
-    pattern.abnormalPattern = false;
-    if (pattern.peakActivityTime < 9 || pattern.peakActivityTime > 17) {
-        pattern.abnormalPattern = true;
-    }
-}
-
-uint8_t detectEnvironmentalStress(SensorData& data, AudioAnalysis& audio,
-                                 DailyPattern& pattern, RTC_PCF8523& rtc) {
-    uint8_t stressFactors = STRESS_NONE;
-    
-    if (data.temperature > 35.0) {
-        stressFactors |= STRESS_HEAT;
-    }
-    if (data.temperature < 15.0) {
-        stressFactors |= STRESS_COLD;
-    }
-    if (data.humidity > 85.0 || data.humidity < 30.0) {
-        stressFactors |= STRESS_HUMIDITY;
-    }
-    if (audio.soundLevel > 90 && audio.peakToAvg > 5.0) {
-        stressFactors |= STRESS_PREDATOR;
-    }
-    
-    DateTime now = rtc.now();
-    if (now.hour() >= 10 && now.hour() <= 16 && audio.soundLevel < 20) {
-        stressFactors |= STRESS_DISEASE;
-    }
-    
-    float avgDayActivity = 0;
-    for (int i = 9; i <= 17; i++) {
-        avgDayActivity += pattern.hourlyActivity[i];
-    }
-    avgDayActivity /= 9;
-    if (avgDayActivity < 25) {
-        stressFactors |= STRESS_HUNGER;
-    }
-    
-    return stressFactors;
-}
-
-// =============================================================================
 // EXTENDED ML FEATURE CALCULATIONS
 // =============================================================================
 
@@ -1210,4 +876,72 @@ uint8_t AudioProcessor::calculateSignalQuality() {
     }
     
     return quality;
+}
+
+// =============================================================================
+// SIMPLE INTERFACE FUNCTIONS FOR COMPATIBILITY
+// =============================================================================
+
+void initializeAudio(SystemStatus& status) {
+    audioProcessor.initialize(nullptr, &status);
+}
+
+void processAudio(SensorData& data, SystemSettings& settings) {
+    // Simple interface: just collect one sample and update display data
+    int audioSample = analogRead(AUDIO_INPUT_PIN);
+    audioProcessor.addSample(audioSample);
+    audioProcessor.updateDisplayData();
+    
+    // Update sensor data with current display values
+    AudioDisplayData displayData = audioProcessor.getDisplayData();
+    data.dominantFreq = (uint16_t)displayData.dominantFreq;
+    data.soundLevel = (uint8_t)displayData.soundLevel;
+    data.beeState = displayData.beeState;
+}
+
+void runAudioDiagnostics(SystemStatus& status) {
+    audioProcessor.runDiagnostics();
+}
+
+void calibrateAudioLevels(SystemSettings& settings, int durationSeconds) {
+    Serial.println(F("Starting audio calibration..."));
+    Serial.println(F("Ensure hive is in normal state"));
+    
+    unsigned long startTime = millis();
+    unsigned long duration = durationSeconds * 1000;
+    
+    float avgFreq = 0;
+    float avgLevel = 0;
+    int sampleCount = 0;
+    
+    while (millis() - startTime < duration) {
+        audioProcessor.updateDisplayData();
+        AudioDisplayData data = audioProcessor.getDisplayData();
+        
+        avgFreq += data.dominantFreq;
+        avgLevel += data.soundLevel;
+        sampleCount++;
+        
+        delay(100);
+    }
+    
+    if (sampleCount > 0) {
+        avgFreq /= sampleCount;
+        avgLevel /= sampleCount;
+        
+        Serial.print(F("Average frequency: "));
+        Serial.print(avgFreq);
+        Serial.println(F(" Hz"));
+        Serial.print(F("Average level: "));
+        Serial.print(avgLevel);
+        Serial.println(F("%"));
+        
+        Serial.println(F("\nSuggested settings:"));
+        Serial.print(F("Queen frequency range: "));
+        Serial.print(avgFreq - 50);
+        Serial.print(F(" - "));
+        Serial.println(avgFreq + 50);
+        Serial.print(F("Stress threshold: "));
+        Serial.println(avgLevel + 30);
+    }
 }

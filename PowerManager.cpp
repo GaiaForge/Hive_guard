@@ -275,9 +275,7 @@ void PowerManager::handleUserActivity() {
     status.buttonPresses++;
     
     if (status.fieldModeActive) {
-        Serial.print(F("PowerManager: User activity in field mode (button #"));
-        Serial.print(status.buttonPresses);
-        Serial.println(F(") - Display timer reset"));
+        
         
         // Turn display on and reset timeout
         turnOnDisplay();
@@ -286,10 +284,7 @@ void PowerManager::handleUserActivity() {
         // NOTE: This does NOT reset Bluetooth timer - only display timer
         
     } else {
-        Serial.print(F("PowerManager: User activity (button #"));
-        Serial.print(status.buttonPresses);
-        Serial.println(F(")"));
-        
+                
         turnOnDisplay();
     }
 }

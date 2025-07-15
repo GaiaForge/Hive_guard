@@ -376,7 +376,8 @@ void handleFieldModeTransitions() {
     }
 }
 
-// : Field mode operation logic 
+// Replace the audio processing section in handleFieldModeOperation() with this:
+
 void handleFieldModeOperation(unsigned long currentTime) {
     // Check for long press wake when display is off
     if (!powerManager.isDisplayOn()) {
@@ -434,15 +435,29 @@ void handleFieldModeOperation(unsigned long currentTime) {
         Serial.print(currentData.batteryVoltage, 2);
         Serial.println(F("V"));
         
-        // Process audio if available
+        // Process audio if available - CLEAN VERSION
         if (systemStatus.pdmWorking) {
-            processAudio(currentData, settings);
-            if (audioSampleIndex > 0) {
-                AudioAnalysis analysis = analyzeAudioBuffer();
-                currentData.dominantFreq = analysis.dominantFreq;
-                currentData.soundLevel = analysis.soundLevel;
-                currentData.beeState = classifyBeeState(analysis, settings);
-                audioSampleIndex = 0;
+            // Collect several samples for better analysis
+            for (int i = 0; i < 50; i++) {
+                processAudio(currentData, settings);
+                delay(10);
+            }
+            
+            // Try to get a full analysis if we have enough samples
+            AudioAnalysisResult fullResult = audioProcessor.performFullAnalysis();
+            if (fullResult.analysisValid) {
+                currentData.dominantFreq = fullResult.dominantFreq;
+                currentData.soundLevel = fullResult.soundLevel;
+                currentData.beeState = fullResult.beeState;
+                
+                Serial.print(F("Audio: Freq="));
+                Serial.print(fullResult.dominantFreq);
+                Serial.print(F("Hz, Level="));
+                Serial.print(fullResult.soundLevel);
+                Serial.print(F("%, State="));
+                Serial.println(fullResult.beeState);
+            } else {
+                Serial.println(F("Audio: Using simple analysis"));
             }
         }
         
@@ -492,7 +507,8 @@ void handleFieldModeOperation(unsigned long currentTime) {
     }
 }
 
-// : Testing mode operation (normal operation) - Enhanced
+// Also update the handleTestingModeOperation function:
+
 void handleTestingModeOperation(unsigned long currentTime) {
     // Read sensors every 5 seconds - UNCHANGED
     if (currentTime - lastSensorRead >= 5000) {
@@ -511,7 +527,7 @@ void handleTestingModeOperation(unsigned long currentTime) {
         Serial.println(F("V"));
     }
     
-    // : Update Power Manager every 5 seconds
+    // Update Power Manager every 5 seconds
     if (currentTime - lastPowerUpdate >= 5000) {
         powerManager.updatePowerMode(currentData.batteryVoltage);
         lastPowerUpdate = currentTime;
@@ -544,31 +560,81 @@ void handleTestingModeOperation(unsigned long currentTime) {
         }
     }
     
-    // Process audio if microphone is present - UNCHANGED
-    if (systemStatus.pdmWorking && (currentTime % 200 == 0)) { // Every 200ms
-        processAudio(currentData, settings);
-
+    // CLEAN AUDIO PROCESSING - No more legacy code!
+    if (systemStatus.pdmWorking) {
+        // Always collect audio samples for real-time display (every 100ms)
+        static unsigned long lastAudioSample = 0;
+        if (currentTime - lastAudioSample >= 100) {
+            processAudio(currentData, settings);
+            lastAudioSample = currentTime;
+        }
         
+        // Run full FFT analysis every 5 seconds ONLY when viewing Sound Monitor
+        static unsigned long lastFullAnalysis = 0;
+        if (currentMode == MODE_SOUND && (currentTime - lastFullAnalysis >= 5000)) {
+            Serial.println(F("Running full audio analysis for Sound Monitor..."));
+            
+            AudioAnalysisResult fullResult = audioProcessor.performFullAnalysis();
+            
+            if (fullResult.analysisValid) {
+                // Update current data with full analysis
+                currentData.dominantFreq = fullResult.dominantFreq;
+                currentData.soundLevel = fullResult.soundLevel;
+                currentData.beeState = fullResult.beeState;
+                
+                // Update spectral features for display
+                currentSpectralFeatures.spectralCentroid = fullResult.spectralCentroid;
+                currentSpectralFeatures.totalEnergy = fullResult.shortTermEnergy;
+                currentSpectralFeatures.harmonicity = fullResult.harmonicity;
+                
+                // Copy band energies
+                currentSpectralFeatures.bandEnergyRatios[0] = fullResult.bandEnergy0_200Hz;
+                currentSpectralFeatures.bandEnergyRatios[1] = fullResult.bandEnergy200_400Hz;
+                currentSpectralFeatures.bandEnergyRatios[2] = fullResult.bandEnergy400_600Hz;
+                currentSpectralFeatures.bandEnergyRatios[3] = fullResult.bandEnergy600_800Hz;
+                currentSpectralFeatures.bandEnergyRatios[4] = fullResult.bandEnergy800_1000Hz;
+                currentSpectralFeatures.bandEnergyRatios[5] = fullResult.bandEnergy1000PlusHz;
+                
+                // Update activity trend for display
+                currentActivityTrend.currentActivity = fullResult.shortTermEnergy * 10.0; // Scale for display
+                currentActivityTrend.baselineActivity = fullResult.longTermEnergy * 10.0;
+                currentActivityTrend.activityIncrease = fullResult.activityIncrease;
+                currentActivityTrend.abnormalTiming = (fullResult.contextFlags & CONTEXT_EVENING) > 0;
+                
+                Serial.print(F("FFT Complete: Freq="));
+                Serial.print(fullResult.dominantFreq);
+                Serial.print(F("Hz, Centroid="));
+                Serial.print(fullResult.spectralCentroid, 1);
+                Serial.print(F("Hz, Activity="));
+                Serial.print(fullResult.activityIncrease, 2);
+                Serial.print(F("x, Baseline="));
+                Serial.print(currentActivityTrend.baselineActivity, 1);
+                Serial.println(F("%"));
+            } else {
+                Serial.println(F("FFT analysis failed - not enough samples"));
+            }
+            
+            lastFullAnalysis = currentTime;
+        }
     }
         
     // Log data if enabled
-    if (settings.logEnabled) { // This is the only check needed here
+    if (settings.logEnabled) {
         unsigned long logIntervalMs = settings.logInterval * 60000UL;
         if (currentTime - lastLogTime >= logIntervalMs) {
-            // Let the logData function handle SD/RTC failures
             logData(currentData, rtc, settings, systemStatus);
             lastLogTime = currentTime;
         }
     }
     
-    // Update display every second (unless button was just pressed) - UNCHANGED
+    // Update display every second (unless button was just pressed)
     if (currentTime - lastDisplayUpdate >= 1000) {
         updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
                       currentSpectralFeatures, currentActivityTrend);
         lastDisplayUpdate = currentTime;
     }
     
-    // Check for factory reset (BACK + SELECT held together) - UNCHANGED
+    // Check for factory reset (BACK + SELECT held together)
     static unsigned long resetHoldStart = 0;
     if (isButtonHeld(2) && isButtonHeld(3)) { // SELECT + BACK
         if (resetHoldStart == 0) {
