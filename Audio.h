@@ -1,6 +1,6 @@
 /**
  * Audio.h
- * Audio processing header - Hybrid approach with real-time display and FFT analysis
+ * Audio processing header - Clean AudioProcessor-only version
  */
 
 #ifndef AUDIO_H
@@ -179,10 +179,6 @@ private:
     float calculateZeroCrossingRate();
     uint8_t calculateSignalQuality();
     
-    // Real-time processing
-    void processRealtimeSample(int sample);
-    void updateRealtimeMetrics();
-    
 public:
     AudioProcessor();
     
@@ -210,34 +206,18 @@ public:
 };
 
 // =============================================================================
-// GLOBAL AUDIO INSTANCE AND LEGACY SUPPORT
+// GLOBAL AUDIO INSTANCE
 // =============================================================================
 
 extern AudioProcessor audioProcessor;
 
-// Legacy global variables for compatibility
-extern int audioBuffer[AUDIO_SAMPLE_BUFFER_SIZE];
-extern volatile int audioSampleIndex;
+// =============================================================================
+// SIMPLE INTERFACE FUNCTIONS (for main.cpp compatibility)
+// =============================================================================
 
-// Legacy function declarations for compatibility
 void initializeAudio(SystemStatus& status);
 void processAudio(SensorData& data, SystemSettings& settings);
-AudioAnalysis analyzeAudioBuffer();
-float estimateSpectralCentroidOptimized();
-uint8_t classifyBeeState(AudioAnalysis& analysis, SystemSettings& settings);
 void runAudioDiagnostics(SystemStatus& status);
 void calibrateAudioLevels(SystemSettings& settings, int durationSeconds);
-
-// Additional analysis functions
-AbscondingIndicators detectAbscondingRisk(AudioAnalysis& analysis, 
-                                          SystemSettings& settings,
-                                          uint32_t currentTime);
-void updateDailyPattern(DailyPattern& pattern, uint8_t hour, 
-                       uint8_t activity, float temperature);
-uint8_t detectEnvironmentalStress(SensorData& data, AudioAnalysis& audio,
-                                 DailyPattern& pattern, RTC_PCF8523& rtc);
-
-SpectralFeatures analyzeAudioFFT();
-void updateActivityTrend(ActivityTrend& trend, SpectralFeatures& current, uint8_t hour);
 
 #endif // AUDIO_H
