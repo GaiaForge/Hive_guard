@@ -122,47 +122,74 @@ void storeInBuffer(const SensorData& data) {
     Serial.println(F("/20)"));
 }
 
+/**
+ * Flushes all buffered data to the SD card.
+ * This version is corrected to prevent data loss by only clearing the buffer
+ * after a successful write attempt.
+ */
 void flushBufferedData(RTC_PCF8523& rtc, SystemSettings& settings, SystemStatus& status) {
     Serial.print(F("Flushing "));
     Serial.print(emergencyBuffer.count);
     Serial.println(F(" buffered readings..."));
-    
+
+    // Determine the starting point and number of items to flush from the circular buffer
     uint8_t startIndex = emergencyBuffer.full ? emergencyBuffer.writeIndex : 0;
     uint8_t itemsToFlush = emergencyBuffer.count;
-    
-    // Clear buffer FIRST to prevent recursion
-    emergencyBuffer.count = 0;
-    emergencyBuffer.writeIndex = 0;
-    emergencyBuffer.full = false;
-    
+
+    if (itemsToFlush == 0) {
+        Serial.println(F("Buffer is empty, nothing to flush."));
+        return;
+    }
+
+    // Attempt to write the data to the SD card FIRST
+    bool flushSucceeded = true;
     for (uint8_t i = 0; i < itemsToFlush; i++) {
         uint8_t index = (startIndex + i) % 20;
-        
-        // Write directly to SD without calling logData() to avoid recursion
+
+        // Ensure SD card and RTC are working before trying to write
         if (status.sdWorking && status.rtcWorking) {
-            DateTime now = rtc.now();
+            DateTime now = rtc.now(); // Get a fresh timestamp
             char filename[30];
-            sprintf(filename, "/HIVE_DATA/%04d/%04d-%02d.CSV", 
+            sprintf(filename, "/HIVE_DATA/%04d/%04d-%02d.CSV",
                     now.year(), now.year(), now.month());
-            
-            bool fileExists = SD.exists(filename);
+
+            // This check is important: if we can't even open the file, stop the flush.
             SDFile dataFile = SD.open(filename, FILE_WRITE);
-            
             if (dataFile) {
-                if (!fileExists) {
+                if (dataFile.size() == 0) { // Check if it's a new file to write the header
                     writeLogHeader(dataFile, now, settings);
                 }
+                // Write the buffered entry
                 writeLogEntry(dataFile, now, emergencyBuffer.readings[index]);
                 dataFile.close();
+            } else {
+                Serial.println(F("Buffer flush FAILED: Could not open SD file."));
+                flushSucceeded = false;
+                break; // Exit the loop if the SD card fails mid-flush
             }
+        } else {
+            Serial.println(F("Buffer flush SKIPPED: SD or RTC not working."));
+            flushSucceeded = false;
+            break; // Exit loop if system status is bad
         }
-        
-        // Small delay to avoid overwhelming SD card
+
+        // Small delay to prevent overwhelming the SD card during a large flush
         delay(10);
     }
-    
-    Serial.println(F("Buffer flush complete"));
+
+    // ONLY clear the buffer if the entire flush operation was successful
+    if (flushSucceeded) {
+        emergencyBuffer.count = 0;
+        emergencyBuffer.writeIndex = 0;
+        emergencyBuffer.full = false;
+        Serial.println(F("Buffer flush complete."));
+    } else {
+        Serial.println(F("Data remains in buffer due to write failure."));
+    }
 }
+    
+  
+
 // =============================================================================
 // LOG FILE WRITING
 // =============================================================================

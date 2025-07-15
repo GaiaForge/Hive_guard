@@ -167,38 +167,7 @@ void setup() {
     }
     delay(500);
 
-    // Add after initializeAudio(systemStatus); in setup()
-    Serial.println(F("\n=== MIC HARDWARE TEST ==="));
-    int minVal = 4095, maxVal = 0;
-    Serial.println(F("Testing A4 for 2 seconds..."));
-    for (int i = 0; i < 200; i++) {
-        int reading = analogRead(A4);
-        if (reading < minVal) minVal = reading;
-        if (reading > maxVal) maxVal = reading;
-        if (i % 50 == 0) {
-            Serial.print(F("Sample "));
-            Serial.print(i);
-            Serial.print(F(": "));
-            Serial.println(reading);
-        }
-        delay(10);
-    }
-    int variation = maxVal - minVal;
-    Serial.print(F("Variation: "));
-    Serial.println(variation);
-    if (variation > 200) {
-        Serial.println(F("✓ MICROPHONE WORKING"));
-    } else {
-        Serial.println(F("✗ NO MICROPHONE"));
-    }
-    Serial.println(F("========================"));
 
-    if (systemStatus.pdmWorking && audioSampleIndex > 0) {
-    Serial.print(F("Audio buffer samples: "));
-    Serial.print(audioSampleIndex);
-    Serial.print(F(", Raw A4: "));
-    Serial.println(analogRead(A4));
-    }
         
     // Initialize buttons
     if (systemStatus.displayWorking) updateDiagnosticLine(display, "Initializing buttons...");
@@ -579,18 +548,16 @@ void handleTestingModeOperation(unsigned long currentTime) {
     if (systemStatus.pdmWorking && (currentTime % 200 == 0)) { // Every 200ms
         processAudio(currentData, settings);
 
-        Serial.print(F("DEBUG: audioSampleIndex = "));
-        Serial.println(audioSampleIndex);          
         
     }
-    
-    // Log data if enabled and SD is working - UNCHANGED
-    if (settings.logEnabled && systemStatus.sdWorking && systemStatus.rtcWorking) {
+        
+    // Log data if enabled
+    if (settings.logEnabled) { // This is the only check needed here
         unsigned long logIntervalMs = settings.logInterval * 60000UL;
         if (currentTime - lastLogTime >= logIntervalMs) {
+            // Let the logData function handle SD/RTC failures
             logData(currentData, rtc, settings, systemStatus);
             lastLogTime = currentTime;
-            Serial.println(F("Data logged to SD"));
         }
     }
     
