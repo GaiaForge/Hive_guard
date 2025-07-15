@@ -65,16 +65,16 @@ void readAllSensors(Adafruit_BME280& bme, SensorData& data,
 // =============================================================================
 
 void readBattery(SensorData& data) {
+    // Explicitly set 12-bit resolution (nRF52840 default)
+    analogReadResolution(12);
+    
     // Read analog value
     float measuredvbat = analogRead(VBATPIN);
     
-    // Convert to voltage
-    // Voltage divider reduces battery voltage by half
-    // Reference voltage is 3.6V
-    // ADC is 10-bit (0-1023)
+    // Convert to voltage (corrected for 12-bit ADC)
     measuredvbat *= 2;      // Account for voltage divider
     measuredvbat *= 3.6;    // Reference voltage
-    measuredvbat /= 1024;   // Convert from ADC value
+    measuredvbat /= 4095;   // Convert from 12-bit ADC value (not 1024)
     
     data.batteryVoltage = measuredvbat;
 }

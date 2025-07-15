@@ -1,6 +1,6 @@
 /**
  * PowerManager.h
- * Power management system header
+ * Power management system header - WITH BLUETOOTH INTEGRATION
  */
 
 #ifndef POWER_MANAGER_H
@@ -9,13 +9,16 @@
 #include "Config.h"
 #include "DataStructures.h"
 
+// Forward declaration to avoid circular dependency
+class BluetoothManager;
+
 // =============================================================================
 // POWER MANAGEMENT ENUMERATIONS
 // =============================================================================
 
 enum PowerMode {
-    POWER_TESTING = 0,      // Full power, display always on
-    POWER_FIELD = 1,       // Field mode, display timeout enabled
+    POWER_TESTING = 0,      // Full power, display always on, Bluetooth always on
+    POWER_FIELD = 1,       // Field mode, display timeout enabled, Bluetooth manual only
     POWER_SAVE = 2,        // Low battery, reduced functionality
     POWER_CRITICAL = 3     // Very low battery, minimal operation
 };
@@ -25,7 +28,8 @@ enum WakeUpSource {
     WAKE_TIMER = 1,
     WAKE_RTC = 2,
     WAKE_EXTERNAL = 3,
-    WAKE_UNKNOWN = 4
+    WAKE_BLUETOOTH_BUTTON = 4,  // NEW: Bluetooth button pressed
+    WAKE_UNKNOWN = 5
 };
 
 enum ComponentPowerState {
@@ -48,6 +52,13 @@ struct PowerStatus {
     bool displayOn;
     unsigned long displayTimeoutMs;
     unsigned long lastUserActivity;
+    
+    // NEW: Separate Bluetooth timing
+    bool bluetoothOn;           // Current Bluetooth state
+    unsigned long bluetoothTimeoutMs;  // Same duration as display timeout
+    unsigned long lastBluetoothActivity; // Last Bluetooth connection/disconnection
+    bool bluetoothManuallyActivated;    // Was Bluetooth turned on by button?
+    
     unsigned long nextSleepTime;
     unsigned long totalUptime;
     uint32_t sleepCycles;
@@ -58,11 +69,12 @@ struct PowerStatus {
     ComponentPowerState displayState;
     ComponentPowerState sensorState;
     ComponentPowerState audioState;
+    ComponentPowerState bluetoothState;  // NEW: Bluetooth power state
 };
 
 struct PowerSettings {
     bool fieldModeEnabled;
-    uint8_t displayTimeoutMin;     // Display timeout in minutes (1-30)
+    uint8_t displayTimeoutMin;     // Display timeout in minutes (1-5)
     uint8_t sleepIntervalMin;      // Deep sleep interval in minutes
     bool autoFieldMode;            // Auto-enable field mode when battery low
     uint8_t criticalBatteryLevel;  // Battery level to enter critical mode
@@ -78,23 +90,34 @@ private:
     PowerSettings settings;
     SystemStatus* systemStatus;
     SystemSettings* systemSettings;
+    BluetoothManager* bluetoothManager;  // NEW: Reference to Bluetooth manager
     
     // Internal timing
     unsigned long lastPowerCheck;
     unsigned long displayOffTime;
     unsigned long lastSleepTime;
-    
+
     // Power consumption estimates (mA)
     static const float POWER_TESTING_MA;
     static const float POWER_DISPLAY_MA;
     static const float POWER_SENSORS_MA;
     static const float POWER_AUDIO_MA;
+    static const float POWER_BLUETOOTH_MA;  // NEW: Bluetooth power consumption
     static const float POWER_SLEEP_MA;
     
     // Internal methods    
     void calculateRuntimeEstimate(float batteryVoltage);
     void handleDisplayTimeout();
+    void handleBluetoothTimeout();  // NEW: Handle Bluetooth timeout
     void configureButtonWakeup();
+    void checkFieldModeTimeout(unsigned long currentTime);  
+    void checkBluetoothTimeout(unsigned long currentTime);  // NEW: Check Bluetooth timeout
+    
+    // Long press wake detection
+    unsigned long longPressStartTime;
+    bool longPressDetected;
+    static const unsigned long LONG_PRESS_WAKE_TIME = 1000; // 1 second for wake
+        
     
     
 public:
@@ -102,12 +125,31 @@ public:
     
     // Initialization
     void initialize(SystemStatus* sysStatus, SystemSettings* sysSettings);
+    void setBluetoothManager(BluetoothManager* btManager);  // NEW: Set Bluetooth manager reference
     void loadPowerSettings();
     void savePowerSettings();
+
+    // Hardware display power control 
+    void initializeDisplayPower();
+    void turnOnDisplay();
+    void turnOffDisplay();
+    bool isDisplayOn() const;
+    void resetDisplayTimeout();
+    unsigned long getDisplayTimeRemaining() const;
+    
+    // NEW: Bluetooth power control
+    void activateBluetooth();       // Turn on Bluetooth (manual button press)
+    void deactivateBluetooth();     // Turn off Bluetooth (timeout or manual)
+    bool isBluetoothOn() const;
+    void handleBluetoothConnection();    // Reset Bluetooth timer on connection
+    void handleBluetoothDisconnection(); // Start Bluetooth countdown on disconnect
+    unsigned long getBluetoothTimeRemaining() const;
     
     // Core power management
     void update();
-    void handleUserActivity();
+    void handleUserActivity();              // Resets display timer only
+    void handleBluetoothActivity();         // NEW: Resets Bluetooth timer only
+    void handleBluetoothButtonPress();      // NEW: Handle external Bluetooth button
     void handleWakeUp(WakeUpSource source);
     bool shouldEnterSleep();
     void configureWakeupSources();
@@ -124,19 +166,15 @@ public:
     bool isTimeForBufferFlush() const;
     void setWakeSource(bool fromTimer);
     bool wasWokenByTimer() const;
-    
-    // Display management
-    void turnOnDisplay();
-    void turnOffDisplay();
-    bool isDisplayOn() const;
-    void resetDisplayTimeout();
-    unsigned long getDisplayTimeRemaining() const;
-    
+    bool checkForLongPressWake();
+        
     // Component power control
     void powerDownSensors();
     void powerUpSensors();
     void powerDownAudio();
     void powerUpAudio();
+    void powerDownBluetooth();      // NEW: Power down Bluetooth
+    void powerUpBluetooth();        // NEW: Power up Bluetooth
     void powerDownNonEssential();
     void powerUpAll();
     
@@ -145,6 +183,8 @@ public:
     void prepareSleep();
     void wakeFromSleep();
     bool canEnterSleep() const;
+    void enterFieldSleep();
+    void wakeFromFieldSleep(); 
     
     // Battery and power monitoring
     PowerMode getCurrentPowerMode() const;

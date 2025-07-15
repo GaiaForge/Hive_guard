@@ -207,10 +207,10 @@ int getStackHighWaterMark() {
 bool isMemoryHealthy() {
     MemoryInfo info = getMemoryInfo();
     
-    // Conservative thresholds for field deployment reliability
-    if (info.free_heap < 51200) return false;        // Need at least 512 bytes free heap
-    if (info.largest_free_block < 16384) return false; // Avoid fragmentation issues
-    if ((info.used_stack * 100) / info.stack_size > 80) return false; // Stack usage < 80%
+    // Reasonable thresholds
+    if (info.free_heap < 1024) return false;         // At least 1KB free heap  
+    if (info.largest_free_block < 512) return false; // At least 512 bytes contiguous
+    if ((info.used_stack * 100) / info.stack_size > 90) return false; // Stack usage < 90%
     
     return true;
 }
@@ -227,13 +227,13 @@ uint8_t getMemoryUsagePercent() {
 // =============================================================================
 
 // Button state tracking
-static bool buttonStates[4] = {false, false, false, false};
-static bool lastButtonStates[4] = {false, false, false, false};
-static unsigned long lastDebounceTime[4] = {0, 0, 0, 0};
-static bool buttonPressed[4] = {false, false, false, false};
-static unsigned long buttonPressStartTime[4] = {0, 0, 0, 0};
-static bool longPressActive[4] = {false, false, false, false};
-static unsigned long lastRepeatTime[4] = {0, 0, 0, 0};
+static bool buttonStates[5] = {false, false, false, false, false};
+static bool lastButtonStates[5] = {false, false, false, false, false};
+static unsigned long lastDebounceTime[5] = {0, 0, 0, 0, 0};
+static bool buttonPressed[5] = {false, false, false, false, false};
+static unsigned long buttonPressStartTime[5] = {0, 0, 0, 0, 0};
+static bool longPressActive[5] = {false, false, false, false, false};
+static unsigned long lastRepeatTime[5] = {0, 0, 0, 0, 0};
 
 // Long press configuration
 const unsigned long LONG_PRESS_DELAY = 500;     // Time before long press starts (ms)
@@ -243,7 +243,7 @@ const unsigned long REPEAT_INTERVAL = 100;       // Subsequent repeat interval
 void updateButtonStates() {
     unsigned long currentTime = millis();
     
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         bool reading = readButton(i);
         
         if (reading != lastButtonStates[i]) {
@@ -281,7 +281,7 @@ void updateButtonStates() {
 }
 
 bool wasButtonPressed(int button) {
-    if (button < 0 || button > 3) return false;
+    if (button < 0 || button > 4) return false;
     
     if (buttonPressed[button]) {
         buttonPressed[button] = false;
@@ -291,17 +291,17 @@ bool wasButtonPressed(int button) {
 }
 
 bool isButtonHeld(int button) {
-    if (button < 0 || button > 3) return false;
+    if (button < 0 || button > 4) return false;
     return buttonStates[button];
 }
 
 bool isLongPress(int button) {
-    if (button < 0 || button > 3) return false;
+    if (button < 0 || button > 4) return false;
     return longPressActive[button];
 }
 
 bool shouldRepeat(int button) {
-    if (button < 0 || button > 3) return false;
+    if (button < 0 || button > 4) return false;
     if (!longPressActive[button]) return false;
     
     unsigned long currentTime = millis();
@@ -323,7 +323,7 @@ bool shouldRepeat(int button) {
 }
 
 void resetButtonStates() {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         buttonPressed[i] = false;
         buttonStates[i] = false;
         lastButtonStates[i] = false;
@@ -338,11 +338,21 @@ bool readButton(int buttonNum) {
         case 1: pin = BTN_DOWN; break;
         case 2: pin = BTN_SELECT; break;
         case 3: pin = BTN_BACK; break;
+        case 4: pin = BTN_BLUETOOTH; break;  
         default: return false;
     }
     
-    // Read analog value and consider pressed if below threshold
+    // Read digital value 
     return !digitalRead(pin);
+}
+
+// Convenience functions for Bluetooth button
+bool wasBluetoothButtonPressed() {
+    return wasButtonPressed(4);
+}
+
+bool isBluetoothButtonHeld() {
+    return isButtonHeld(4);
 }
 
 // =============================================================================

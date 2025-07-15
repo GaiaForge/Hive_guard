@@ -16,40 +16,68 @@ volatile int audioSampleIndex = 0;
 // =============================================================================
 
 void initializeAudio(SystemStatus& status) {
-    // Configure analog input for MAX9814
-    analogReadResolution(12);  // 12-bit resolution
+    analogReadResolution(12);
     
-    status.pdmWorking = true;  // Reuse this flag
-    Serial.println(F("MAX9814 analog microphone initialized"));
-    Serial.println(F("Using automatic gain control (AGC)"));
+    // Test A4 for actual microphone signal
+    int minVal = 4095, maxVal = 0;
+    
+    for (int i = 0; i < 20; i++) {
+        int reading = analogRead(A4);
+        if (reading < minVal) minVal = reading;
+        if (reading > maxVal) maxVal = reading;
+        delay(10);
+    }
+    
+    int variation = maxVal - minVal;
+    
+        
+    if (variation > 200) {
+        status.pdmWorking = true;
+        Serial.println(F("MAX9814 microphone detected on A4"));
+        Serial.print(F("Audio variation: "));
+        Serial.println(variation);
+    } else {
+        status.pdmWorking = false;
+        Serial.println(F("No microphone on A4 (floating pin)"));
+        Serial.print(F("A4 variation: "));
+        Serial.print(variation);
+        Serial.println(F(" (need >200 for mic)"));
+    }
 }
 
 // =============================================================================
 // AUDIO PROCESSING
 // =============================================================================
-
 void processAudio(SensorData& data, SystemSettings& settings) {
     static unsigned long lastSampleTime = 0;
     unsigned long currentTime = millis();
     
-    if (currentTime - lastSampleTime >= (1000 / AUDIO_SAMPLE_RATE)) {
-        int audioSample = analogRead(AUDIO_INPUT_PIN);
-        
-        audioBuffer[audioSampleIndex] = audioSample;
-        audioSampleIndex++;
-        
-        // CRITICAL FIX: Add bounds checking
-        if (audioSampleIndex >= AUDIO_SAMPLE_BUFFER_SIZE) {
-            AudioAnalysis analysis = analyzeAudioBuffer();
+    // Collect multiple samples to fill the buffer faster
+    int samplesTaken = 0;
+    while (samplesTaken < 10 && audioSampleIndex < AUDIO_SAMPLE_BUFFER_SIZE) {
+        if (currentTime - lastSampleTime >= 1) { // Sample every 1ms instead of 0.125ms
+            int audioSample = analogRead(AUDIO_INPUT_PIN);
             
-            data.dominantFreq = analysis.dominantFreq;
-            data.soundLevel = analysis.soundLevel;
-            data.beeState = classifyBeeState(analysis, settings);
+            audioBuffer[audioSampleIndex] = audioSample;
+            audioSampleIndex++;
+            samplesTaken++;
             
-            audioSampleIndex = 0; // Reset safely
+            lastSampleTime = currentTime;
+            currentTime = millis(); // Update for next sample
+        } else {
+            break; // Don't wait, just take what we can
         }
+    }
+    
+    // Analyze when we have enough samples
+    if (audioSampleIndex >= AUDIO_SAMPLE_BUFFER_SIZE) {
+        AudioAnalysis analysis = analyzeAudioBuffer();
         
-        lastSampleTime = currentTime;
+        data.dominantFreq = analysis.dominantFreq;
+        data.soundLevel = analysis.soundLevel;
+        data.beeState = classifyBeeState(analysis, settings);
+        
+        audioSampleIndex = 0; // Reset safely
     }
 }
 

@@ -24,6 +24,9 @@ void saveSettings(SystemSettings& settings);
 void validateSettings(SystemSettings& settings);
 void exportSettingsToSD(SystemSettings& settings);
 
+// ADDED: Missing function declaration that main.cpp calls
+void printSettingsInfo(const SystemSettings& settings);
+
 void clearUserData();
 bool confirmFactoryReset(Adafruit_SH1106G& display);
 void performFactoryReset(SystemSettings& settings, SystemStatus& status, 
