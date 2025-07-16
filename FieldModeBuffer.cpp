@@ -65,9 +65,8 @@ bool FieldModeBufferManager::flushToSD(RTC_PCF8523& rtc, SystemStatus& status) {
     
     // Get current date for filename
     DateTime now = rtc.now();
-    char filename[30];
-    sprintf(filename, "/HIVE_DATA/%04d/%04d-%02d.CSV", 
-            now.year(), now.year(), now.month());
+    char filename[12];
+    sprintf(filename, "/H%02d%02d.CSV", now.year() % 100, now.month());
     
     // Check if file exists to write header
     bool fileExists = SD.exists(filename);

@@ -20,6 +20,8 @@
 // HARDWARE PINS
 // =============================================================================
 
+#define RTC_INT_PIN A1
+
 // OLED Display
 #define SCREEN_WIDTH  128
 #define SCREEN_HEIGHT 64

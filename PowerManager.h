@@ -1,6 +1,6 @@
 /**
  * PowerManager.h
- * Power management system header - WITH BLUETOOTH INTEGRATION
+ * Power management system header - WITH BLUETOOTH INTEGRATION AND DEEP SLEEP
  */
 
 #ifndef POWER_MANAGER_H
@@ -96,6 +96,7 @@ private:
     unsigned long lastPowerCheck;
     unsigned long displayOffTime;
     unsigned long lastSleepTime;
+    bool rtcInterruptWorking;  // Track if RTC interrupt is functional
 
     // Power consumption estimates (mA)
     static const float POWER_TESTING_MA;
@@ -104,6 +105,18 @@ private:
     static const float POWER_AUDIO_MA;
     static const float POWER_BLUETOOTH_MA;  // NEW: Bluetooth power consumption
     static const float POWER_SLEEP_MA;
+    
+    // Deep sleep management - PRIVATE
+    void enterNRF52Sleep();
+    void configureRTCWakeup(uint32_t wakeupTimeUnix);
+    bool handleRTCWakeup();
+    void setupRTCInterrupt();
+    static void rtcInterruptHandler();  // Static interrupt handler
+
+    // Wake-up state tracking - PRIVATE
+    volatile bool wakeupFromRTC;
+    volatile bool wakeupFromButton;
+    uint32_t scheduledWakeTime;
     
     // Internal methods    
     void calculateRuntimeEstimate(float batteryVoltage);
@@ -118,8 +131,6 @@ private:
     bool longPressDetected;
     static const unsigned long LONG_PRESS_WAKE_TIME = 1000; // 1 second for wake
         
-    
-    
 public:
     PowerManager();
     
@@ -159,6 +170,7 @@ public:
     void disableFieldMode();
     bool isFieldModeActive() const;
     void updatePowerMode(float batteryVoltage);
+    
 
     // Field mode sleep management
     bool shouldTakeReading() const;
@@ -185,6 +197,12 @@ public:
     bool canEnterSleep() const;
     void enterFieldSleep();
     void wakeFromFieldSleep(); 
+    void clearRTCAlarmFlags();  // clear RTC alarm state
+    bool isRTCInterruptWorking() const { return rtcInterruptWorking; }
+    
+    // Deep sleep status - PUBLIC
+    bool isWakeupFromRTC() const;
+    bool isWakeupFromButton() const;
     
     // Battery and power monitoring
     PowerMode getCurrentPowerMode() const;

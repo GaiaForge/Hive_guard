@@ -30,6 +30,16 @@ void initializeSensors(Adafruit_BME280& bme, SystemStatus& status) {
 
 void readAllSensors(Adafruit_BME280& bme, SensorData& data, 
                     SystemSettings& settings, SystemStatus& status) {
+
+
+    // Add 200ms stabilization delay for sensors after wake-up
+    static unsigned long lastReading = 0;
+    unsigned long currentTime = millis();
+    if (currentTime - lastReading < 200) {
+        delay(200 - (currentTime - lastReading));
+    }
+    lastReading = millis();
+
     // Read battery first
     readBattery(data);
     

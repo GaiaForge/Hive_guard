@@ -17,6 +17,28 @@
 #include "FieldModeBuffer.h"
 #include "Bluetooth.h"
 
+// State machine handlers
+void handleAwakeState(unsigned long currentTime);
+void handleSleepingState(unsigned long currentTime);
+void handleScheduledWakeState(unsigned long currentTime);
+void handleUserWakeState(unsigned long currentTime);
+
+// =============================================================================
+// SLEEP/WAKE STATE MACHINE
+// =============================================================================
+
+enum SystemState {
+    STATE_AWAKE = 0,           // Normal operation, display on, user interaction
+    STATE_SLEEPING = 1,        // Deep sleep, display off, waiting for wake events
+    STATE_SCHEDULED_WAKE = 2,  // Woke from RTC, take readings, display stays off
+    STATE_USER_WAKE = 3        // Woke from button, turn on display, resume interaction
+};
+
+// Global state variables
+SystemState currentSystemState = STATE_AWAKE;
+unsigned long stateChangeTime = 0;
+bool readingInProgress = false;
+
 // Hardware objects
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_BME280 bme;
@@ -39,11 +61,10 @@ PowerManager powerManager;
 extern FieldModeBufferManager fieldBuffer; // Defined in FieldModeBuffer.cpp
 
 
-// Function declarations for field mode functions
-void handleFieldModeTransitions();
-void handleFieldModeOperation(unsigned long currentTime);
+// Function declaration for field mode functions
+
 void handleTestingModeOperation(unsigned long currentTime);
-void enterFieldSleep();
+
 
 // Timing variables
 unsigned long lastSensorRead = 0;
@@ -250,20 +271,49 @@ void setup() {
 void loop() {
     unsigned long currentTime = millis();
     
-    // Update button states - ALWAYS FIRST (unchanged)
+    // Update button states - ALWAYS FIRST
     updateButtonStates();
 
-    // Check for Bluetooth button press (highest priority in field mode)
+    // Check for Bluetooth button press (highest priority)
     if (wasBluetoothButtonPressed()) {
         Serial.println(F("BLUETOOTH BUTTON pressed"));
         powerManager.handleBluetoothButtonPress();
-        resetButtonStates(); // Clear other button states to prevent conflicts
+        
+        // If we were sleeping, this wakes us up
+        if (currentSystemState == STATE_SLEEPING) {
+            currentSystemState = STATE_USER_WAKE;
+            stateChangeTime = currentTime;
+        }
+        resetButtonStates();
     }
     
-    // Check for field mode state changes
-    handleFieldModeTransitions();
-    
-    // Handle settings menu (highest priority) - UNCHANGED
+    // State Machine Logic
+    switch (currentSystemState) {
+        
+        case STATE_AWAKE:
+            handleAwakeState(currentTime);
+            break;
+            
+        case STATE_SLEEPING:
+            handleSleepingState(currentTime);
+            break;
+            
+        case STATE_SCHEDULED_WAKE:
+            handleScheduledWakeState(currentTime);
+            break;
+            
+        case STATE_USER_WAKE:
+            handleUserWakeState(currentTime);
+            break;
+    }
+}
+
+// =============================================================================
+// STATE HANDLERS
+// =============================================================================
+
+void handleAwakeState(unsigned long currentTime) {
+    // Handle settings menu (highest priority)
     if (menuState.settingsMenuActive) {
         handleSettingsMenu(display, menuState, settings, rtc, currentData, systemStatus);
         return; // Skip everything else when in menu
@@ -271,222 +321,216 @@ void loop() {
 
     // Update Bluetooth manager
     bluetoothManager.update();
-  
-    // Check if we are in Field Mode AND the display has timed out (is off)
-    if (powerManager.isFieldModeActive() && !powerManager.isDisplayOn()) {
-        // STATE: Field Mode & Sleeping.
-        // Only run the low-power periodic functions when the display is off.
-        handleFieldModeOperation(currentTime);
-    } else {
-        // STATE: Testing Mode OR Field Mode & Awake.
-        // This block now handles ALL interactive operations for both modes.
+
+    // Handle main navigation buttons
+    bool buttonPressed = false;
+    
+    if (wasButtonPressed(0)) { // UP
+        Serial.println(F("UP pressed"));
+        powerManager.handleUserActivity();
         
-        // Handle main navigation buttons
-        bool buttonPressed = false;
-        
-        if (wasButtonPressed(0)) { // UP
-            Serial.println(F("UP pressed"));
-            powerManager.handleUserActivity();
-            
-            if (currentMode > 0) {
-                currentMode = (DisplayMode)(currentMode - 1);
-            } else {
-                currentMode = MODE_POWER;
-            }
-            buttonPressed = true;
+        if (currentMode > 0) {
+            currentMode = (DisplayMode)(currentMode - 1);
+        } else {
+            currentMode = MODE_POWER;
         }
+        buttonPressed = true;
+    }
+    
+    if (wasButtonPressed(1)) { // DOWN  
+        Serial.println(F("DOWN pressed"));
+        powerManager.handleUserActivity();
         
-        if (wasButtonPressed(1)) { // DOWN  
-            Serial.println(F("DOWN pressed"));
-            powerManager.handleUserActivity();
-            
-            if (currentMode < MODE_POWER) {
-                currentMode = (DisplayMode)(currentMode + 1);
-            } else {
-                currentMode = MODE_DASHBOARD;
-            }
-            buttonPressed = true;
-        }
-        
-        if (wasButtonPressed(2)) { // SELECT
-            Serial.println(F("SELECT pressed"));
-            powerManager.handleUserActivity();
-            
-            if (currentMode == MODE_DASHBOARD) {
-                Serial.println(F("Entering settings menu"));
-                menuState.settingsMenuActive = true;
-                menuState.menuLevel = 0;
-                menuState.selectedItem = 0;
-                resetButtonStates();
-                return; // Return here as menu is now active
-            }
-            buttonPressed = true;
-        }
-        
-        if (wasButtonPressed(3)) { // BACK
-            Serial.println(F("BACK pressed"));
-            powerManager.handleUserActivity();
-            
+        if (currentMode < MODE_POWER) {
+            currentMode = (DisplayMode)(currentMode + 1);
+        } else {
             currentMode = MODE_DASHBOARD;
-            buttonPressed = true;
         }
-
-        // Force display update on button press
-        if (buttonPressed) {
-            Serial.print(F("Mode changed to: "));
-            Serial.println(currentMode);
-            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
-                          currentSpectralFeatures, currentActivityTrend);
-            lastDisplayUpdate = currentTime;
-        }
-
-        // Run the normal, responsive sensor-reading and logging function
-        handleTestingModeOperation(currentTime);
-    }
-} // ← This closing brace was missing!
-
-// These functions should be OUTSIDE of loop(), not inside:
-void handleFieldModeTransitions() {
-    bool fieldModeNow = powerManager.isFieldModeActive();
-    
-    // Detect field mode activation
-    if (!wasInFieldMode && fieldModeNow) {
-        Serial.println(F("\n=== FIELD MODE ACTIVATED ==="));
-        Serial.print(F("Log interval: "));
-        Serial.print(settings.logInterval);
-        Serial.println(F(" minutes"));
-        Serial.println(F("Display stays on - timeout disabled in "));
-        Serial.println(F("Press any button to see current data"));
-        Serial.println(F("Use Settings menu to exit field mode"));
-        Serial.println(F("================================\n"));
-        
-        fieldModeStartTime = millis();
-        fieldBuffer.clearBuffer();
-        wasInFieldMode = true;
+        buttonPressed = true;
     }
     
-    // Detect field mode deactivation
-    if (wasInFieldMode && !fieldModeNow) {
-        Serial.println(F("\n=== FIELD MODE DEACTIVATED ==="));
-        Serial.print(F("Field mode duration: "));
-        Serial.print((millis() - fieldModeStartTime) / 60000);
-        Serial.println(F(" minutes"));
+    if (wasButtonPressed(2)) { // SELECT
+        Serial.println(F("SELECT pressed"));
+        powerManager.handleUserActivity();
         
-        // Flush any remaining buffer data
-        if (fieldBuffer.getBufferCount() > 0) {
-            Serial.println(F("Flushing remaining buffer data..."));
-            fieldBuffer.flushToSD(rtc, systemStatus);
+        if (currentMode == MODE_DASHBOARD) {
+            Serial.println(F("Entering settings menu"));
+            menuState.settingsMenuActive = true;
+            menuState.menuLevel = 0;
+            menuState.selectedItem = 0;
+            resetButtonStates();
+            return;
         }
-        
-        Serial.println(F("Returning to Testing Mode"));
-        Serial.println(F("==============================\n"));
-        
-        wasInFieldMode = false;
+        buttonPressed = true;
     }
-}
-
-void handleFieldModeOperation(unsigned long currentTime) {
-    // Check for long press wake when display is off
-    if (powerManager.checkForLongPressWake()) {
-        resetButtonStates();
-        return; // System is now awake, let next loop handle normal interaction
+    
+    if (wasButtonPressed(3)) { // BACK
+        Serial.println(F("BACK pressed"));
+        powerManager.handleUserActivity();
+        currentMode = MODE_DASHBOARD;
+        buttonPressed = true;
     }
-    // When display is off, ignore all other button presses
-    resetButtonStates(); // Clear any normal presses
 
-    // Check if it's time to take a reading
-    if (powerManager.shouldTakeReading()) {
-        Serial.println(F("\n--- Field Mode: Taking Scheduled Reading ---"));
-        
-        // Power up sensors for this reading
-        powerManager.powerUpSensors();
-        delay(100); // Small delay for sensors to stabilize
-        
-        // Read all sensors
-        readAllSensors(bme, currentData, settings, systemStatus);
-        checkAlerts(currentData, settings, systemStatus);
-        
-        // Log sensor data
-        Serial.print(F("Sensors: T="));
-        Serial.print(currentData.temperature, 1);
-        Serial.print(F("C H="));
-        Serial.print(currentData.humidity, 1);
-        Serial.print(F("% P="));
-        Serial.print(currentData.pressure, 1);
-        Serial.print(F("hPa Bat="));
-        Serial.print(currentData.batteryVoltage, 2);
-        Serial.println(F("V"));
-        
-        // Process audio if available
-        if (systemStatus.pdmWorking) {
-            // Collect several samples for better analysis
-            for (int i = 0; i < 50; i++) {
-                processAudio(currentData, settings);
-                delay(10);
-            }
-            
-            // Try to get a full analysis if we have enough samples
-            AudioAnalysisResult fullResult = audioProcessor.performFullAnalysis();
-            if (fullResult.analysisValid) {
-                currentData.dominantFreq = fullResult.dominantFreq;
-                currentData.soundLevel = fullResult.soundLevel;
-                currentData.beeState = fullResult.beeState;
-                
-                Serial.print(F("Audio: Freq="));
-                Serial.print(fullResult.dominantFreq);
-                Serial.print(F("Hz, Level="));
-                Serial.print(fullResult.soundLevel);
-                Serial.print(F("%, State="));
-                Serial.println(fullResult.beeState);
-            } else {
-                Serial.println(F("Audio: Using simple analysis"));
-            }
-        }
-        
-        // Add to buffer instead of logging directly
-        if (systemStatus.rtcWorking) {
-            uint32_t timestamp = rtc.now().unixtime();
-            if (fieldBuffer.addReading(currentData, timestamp)) {
-                Serial.print(F("Added to buffer ("));
-                Serial.print(fieldBuffer.getBufferCount());
-                Serial.println(F(" readings)"));
-            } else {
-                Serial.println(F("Buffer full - flushing to SD"));
-                fieldBuffer.flushToSD(rtc, systemStatus);
-                fieldBuffer.addReading(currentData, timestamp);
-            }
-        }
-        
-        // Check if it's time to flush buffer (every hour or when full)
-        if (powerManager.isTimeForBufferFlush() || fieldBuffer.isBufferFull()) {
-            Serial.println(F("Flushing buffer to SD..."));
-            fieldBuffer.flushToSD(rtc, systemStatus);
-        }
-        
-        // Update display with current data
-        updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
-                      currentSpectralFeatures, currentActivityTrend);
-        
-        // Set next wake time
-        powerManager.updateNextWakeTime(settings.logInterval);
-        
-        Serial.print(F("Next reading in "));
-        Serial.print(settings.logInterval);
-        Serial.println(F(" minutes"));
-        Serial.println(F("--------------------------------\n"));
-
-        // Power down sensors again until next reading
-        powerManager.powerDownSensors();
-        powerManager.powerDownAudio();
-        Serial.println(F("Sensors powered down until next reading"));
-    }
-  
-    // Update display regularly in field mode (display always on)
-    if (currentTime - lastDisplayUpdate >= 5000) { // Every 5 seconds
+    // Force display update on button press
+    if (buttonPressed) {
+        Serial.print(F("Mode changed to: "));
+        Serial.println(currentMode);
         updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
                       currentSpectralFeatures, currentActivityTrend);
         lastDisplayUpdate = currentTime;
     }
+
+    // Run normal testing mode operation
+    handleTestingModeOperation(currentTime);
+    
+    // Check if we should enter sleep (only in field mode)
+    if (powerManager.isFieldModeActive()) {
+        powerManager.update(); // This checks for timeout and triggers sleep
+        
+        // If display is now off, we're going to sleep
+        if (!powerManager.isDisplayOn()) {
+            Serial.println(F("STATE: AWAKE → SLEEPING"));
+            currentSystemState = STATE_SLEEPING;
+            stateChangeTime = currentTime;
+        }
+    }
+}
+
+void handleSleepingState(unsigned long currentTime) {
+    // Update power manager to handle wake-up events
+    powerManager.update();
+    
+    // Check wake-up sources
+    if (powerManager.isWakeupFromRTC()) {
+        Serial.println(F("STATE: SLEEPING → SCHEDULED_WAKE (RTC alarm)"));
+        currentSystemState = STATE_SCHEDULED_WAKE;
+        stateChangeTime = currentTime;
+        readingInProgress = false;
+        return;
+    }
+    
+    // Check for user button wake-up
+    if (wasButtonPressed(0) || wasButtonPressed(1) || wasButtonPressed(2) || wasButtonPressed(3)) {
+        Serial.println(F("STATE: SLEEPING → USER_WAKE (button press)"));
+        powerManager.handleUserActivity(); // This turns on display and resets timeout
+        currentSystemState = STATE_USER_WAKE;
+        stateChangeTime = currentTime;
+        resetButtonStates();
+        return;
+    }
+    
+    // Check for long press wake
+    if (powerManager.checkForLongPressWake()) {
+        Serial.println(F("STATE: SLEEPING → USER_WAKE (long press)"));
+        currentSystemState = STATE_USER_WAKE;
+        stateChangeTime = currentTime;
+        resetButtonStates();
+        return;
+    }
+    
+    // In sleep state, we don't update display or run normal operations
+    // Just minimal processing and wait for wake events
+    
+    // Small delay to prevent busy waiting
+    delay(100);
+}
+
+void handleScheduledWakeState(unsigned long currentTime) {
+    Serial.println(F("=== SCHEDULED WAKE: Taking sensor readings ==="));
+    
+    if (!readingInProgress) {
+        // Power up sensors for this reading
+        powerManager.powerUpSensors();
+        Serial.println(F("Sensors powered up, stabilizing..."));
+        readingInProgress = true;
+        return; // Let sensors stabilize
+    }
+    
+    // Take sensor readings (includes 200ms stabilization delay)
+    readAllSensors(bme, currentData, settings, systemStatus);
+    checkAlerts(currentData, settings, systemStatus);
+    
+    Serial.print(F("Sensors: T="));
+    Serial.print(currentData.temperature, 1);
+    Serial.print(F("C H="));
+    Serial.print(currentData.humidity, 1);
+    Serial.print(F("% P="));
+    Serial.print(currentData.pressure, 1);
+    Serial.print(F("hPa Bat="));
+    Serial.print(currentData.batteryVoltage, 2);
+    Serial.println(F("V"));
+    
+    // Process audio if available
+    if (systemStatus.pdmWorking) {
+        Serial.println(F("Collecting audio samples for full analysis..."));
+        
+        // Collect several samples for better analysis
+        for (int i = 0; i < 50; i++) {
+            processAudio(currentData, settings);
+            delay(10);
+        }
+        
+        // Perform full FFT analysis
+        AudioAnalysisResult fullResult = audioProcessor.performFullAnalysis();
+        if (fullResult.analysisValid) {
+            currentData.dominantFreq = fullResult.dominantFreq;
+            currentData.soundLevel = fullResult.soundLevel;
+            currentData.beeState = fullResult.beeState;
+            
+            Serial.print(F("Audio: Freq="));
+            Serial.print(fullResult.dominantFreq);
+            Serial.print(F("Hz, Level="));
+            Serial.print(fullResult.soundLevel);
+            Serial.print(F("%, State="));
+            Serial.println(getBeeStateString(fullResult.beeState));
+        }
+    }
+    
+    // Add to buffer instead of logging directly
+    if (systemStatus.rtcWorking) {
+        uint32_t timestamp = rtc.now().unixtime();
+        if (fieldBuffer.addReading(currentData, timestamp)) {
+            Serial.print(F("Added to buffer ("));
+            Serial.print(fieldBuffer.getBufferCount());
+            Serial.println(F(" readings)"));
+        } else {
+            Serial.println(F("Buffer full - flushing to SD"));
+            fieldBuffer.flushToSD(rtc, systemStatus);
+            fieldBuffer.addReading(currentData, timestamp);
+        }
+    }
+    
+    // Check if it's time to flush buffer
+    if (powerManager.isTimeForBufferFlush() || fieldBuffer.isBufferFull()) {
+        Serial.println(F("Flushing buffer to SD..."));
+        fieldBuffer.flushToSD(rtc, systemStatus);
+    }
+    
+    // Power down sensors again
+    powerManager.powerDownSensors();
+    powerManager.powerDownAudio();
+    
+    Serial.println(F("=== SCHEDULED WAKE COMPLETE ==="));
+    Serial.println(F("STATE: SCHEDULED_WAKE → SLEEPING"));
+    currentSystemState = STATE_SLEEPING;
+    stateChangeTime = currentTime;
+    readingInProgress = false;
+}
+
+void handleUserWakeState(unsigned long currentTime) {
+    Serial.println(F("=== USER WAKE: Full system access ==="));
+    
+    // Ensure display is on and components are powered up
+    powerManager.wakeFromFieldSleep();
+    
+    // Transition to normal awake state
+    Serial.println(F("STATE: USER_WAKE → AWAKE"));
+    currentSystemState = STATE_AWAKE;
+    stateChangeTime = currentTime;
+    
+    // Update display immediately
+    updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
+                  currentSpectralFeatures, currentActivityTrend);
 }
 
 
@@ -638,50 +682,3 @@ void handleTestingModeOperation(unsigned long currentTime) {
     }
 }
 
-
-// : Field sleep implementation 
-void enterFieldSleep() {
-    Serial.print(F("Field sleep for "));
-    Serial.print(settings.logInterval);
-    Serial.println(F(" minutes..."));
-    
-    // Simple delay-based sleep
-    powerManager.powerDownNonEssential();
-    
-    unsigned long sleepTimeMs = settings.logInterval * 60000UL;
-    unsigned long sleepStart = millis();
-    unsigned long lastSleepUpdate = sleepStart;
-    
-    Serial.println(F("Entering field sleep mode..."));
-    Serial.println(F("Press any button to wake and see data"));
-    
-    while (millis() - sleepStart < sleepTimeMs) {
-        // Check for button press to wake early
-        updateButtonStates();
-        if (wasButtonPressed(0) || wasButtonPressed(1) || wasButtonPressed(2) || wasButtonPressed(3)) {
-            Serial.println(F("Sleep interrupted by button press"));
-            powerManager.setWakeSource(false); // Woken by button
-            powerManager.handleUserActivity(); 
-            break;
-        }
-        
-        // Show sleep progress every 30 seconds
-        if (millis() - lastSleepUpdate >= 30000) {
-            unsigned long elapsed = millis() - sleepStart;
-            unsigned long remaining = sleepTimeMs - elapsed;
-            Serial.print(F("Sleep: "));
-            Serial.print(remaining / 60000);
-            Serial.print(F("m "));
-            Serial.print((remaining % 60000) / 1000);
-            Serial.println(F("s remaining"));
-            lastSleepUpdate = millis();
-        }
-        
-        delay(100); // Small delay to prevent busy-waiting
-    }
-    
-    // Wake up
-    Serial.println(F("Waking from field sleep"));
-    powerManager.powerUpAll();
-    powerManager.setWakeSource(true); // Woken by timer (if not button)
-}
