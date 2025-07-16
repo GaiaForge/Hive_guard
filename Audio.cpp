@@ -794,21 +794,25 @@ void AudioProcessor::updateTemporalFeatures(AudioAnalysisResult& result) {
     }
     currentEnergy = log10(currentEnergy + 1); // Log scale
     
-    // Remove oldest value from sums
+    // Remove oldest value from running sums BEFORE overwriting
     float oldestEnergy = energyHistory[energyHistoryIndex];
     
-    // Add new value
+    // Update running sums efficiently
+    shortTermEnergySum -= oldestEnergy;  // Remove old value
+    shortTermEnergySum += currentEnergy; // Add new value
+    
+    // Update mid-term sum (last 10 readings)
+    // Note: This needs a more sophisticated approach for proper sliding window
+    // For now, we'll recalculate it to ensure accuracy
+    
+    // Add new value to buffer
     energyHistory[energyHistoryIndex] = currentEnergy;
     energyHistoryIndex = (energyHistoryIndex + 1) % 60;
     
-    // Update short term (last 60 seconds)
-    shortTermEnergySum = 0;
-    for (int i = 0; i < 60; i++) {
-        shortTermEnergySum += energyHistory[i];
-    }
+    // Calculate short term energy (last 60 readings)
     result.shortTermEnergy = shortTermEnergySum / 60.0;
     
-    // Mid term (last 10 readings)
+    // Mid term (last 10 readings) - recalculate for accuracy
     midTermEnergySum = 0;
     for (int i = 0; i < 10; i++) {
         int idx = (energyHistoryIndex - i - 1 + 60) % 60;

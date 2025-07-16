@@ -345,14 +345,14 @@ void drawAlertsScreen(Adafruit_SH1106G& display, SensorData& data) {
     display.setTextColor(SH110X_WHITE);
     
     // Title
-    display.setCursor(40, 0);
+    display.setCursor(44, 0);
     display.println(F("Alerts"));
     display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     
     int yPos = 16;
     
     if (data.alertFlags == ALERT_NONE) {
-        display.setCursor(30, 30);
+        display.setCursor(20, 30);
         display.print(F("No active alerts"));
     } else {
         // Display each active alert
@@ -458,6 +458,63 @@ void drawHeader(Adafruit_SH1106G& display, SensorData& data, SystemStatus& statu
     
     // Separator line
     display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+}
+
+
+void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected, 
+                             DateTime dt, bool editMode, int editValue) {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SH110X_WHITE);
+    
+    display.setCursor(25, 0);
+    display.println(F("Time & Date"));
+    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
+    
+    const char* labels[] = {"Year:", "Month:", "Day:", "Hour:", "Minute:"};
+    int values[] = {dt.year(), dt.month(), dt.day(), dt.hour(), dt.minute()};
+    
+    // Use blinking effect for edit mode
+    bool showValue = true;
+    if (editMode) {
+        // Blink the value being edited
+        showValue = (millis() / 300) % 2;  // Blink every 300ms
+        values[selected] = editValue;  // Show the edit value instead
+    }
+    
+    for (int i = 0; i < 5; i++) {
+        int y = 16 + (i * 10);
+        
+        if (i == selected) {
+            display.setCursor(0, y);
+            display.print(F(">"));
+            
+            if (editMode) {
+                // Show edit indicator with asterisk
+                display.setCursor(120, y);
+                display.print(F("*"));
+            }
+        }
+        
+        display.setCursor(12, y);
+        display.print(labels[i]);
+        display.setCursor(60, y);
+        
+        if (i == selected && editMode && !showValue) {
+            // Don't show value during blink off phase
+        } else {
+            if (i == 1) {
+                display.print(getMonthName(values[i]));
+            } else {
+                display.print(values[i]);
+            }
+        }
+    }
+    
+    // REMOVED: The annoying "EDIT: UP/DN SEL:Save" text
+    // The blinking value and asterisk indicator are enough
+    
+    display.display();
 }
 
 void drawTimeDate(Adafruit_SH1106G& display, int y, RTC_PCF8523& rtc, 

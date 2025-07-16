@@ -303,94 +303,6 @@ void handleTimeDateMenu(Adafruit_SH1106G& display, MenuState& state,
     drawTimeDateMenuWithEdit(display, state.selectedItem, editDateTime, inEditMode, editValue);
 }
  
-void drawTimeDateMenuWithEdit(Adafruit_SH1106G& display, int selected, 
-                             DateTime dt, bool editMode, int editValue) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
-    
-    display.setCursor(25, 0);
-    display.println(F("Time & Date"));
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
-    
-    const char* labels[] = {"Year:", "Month:", "Day:", "Hour:", "Minute:"};
-    int values[] = {dt.year(), dt.month(), dt.day(), dt.hour(), dt.minute()};
-    
-    // Use blinking effect for edit mode
-    bool showValue = true;
-    if (editMode) {
-        // Blink the value being edited
-        showValue = (millis() / 300) % 2;  // Blink every 300ms
-        values[selected] = editValue;  // Show the edit value instead
-    }
-    
-    for (int i = 0; i < 5; i++) {
-        int y = 16 + (i * 10);
-        
-        if (i == selected) {
-            display.setCursor(0, y);
-            display.print(F(">"));
-            
-            if (editMode) {
-                // Show edit indicator
-                display.setCursor(120, y);
-                display.print(F("*"));
-            }
-        }
-        
-        display.setCursor(12, y);
-        display.print(labels[i]);
-        display.setCursor(60, y);
-        
-        if (i == selected && editMode && !showValue) {
-            // Don't show value during blink off phase
-        } else {
-            if (i == 1) {
-                display.print(getMonthName(values[i]));
-            } else {
-                display.print(values[i]);
-            }
-        }
-    }
-    
-    // Show edit mode hint at bottom
-    if (editMode) {
-        display.setCursor(0, 56);
-        display.print(F("EDIT: UP/DN SEL:Save"));
-    }
-    
-    display.display();
-}
-
-void drawEditValueScreen(Adafruit_SH1106G& display, int item, int value) {
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SH110X_WHITE);
-    
-    const char* titles[] = {"Set Year", "Set Month", "Set Day", "Set Hour", "Set Minute"};
-    
-    display.setCursor(30, 0);
-    display.println(titles[item]);
-    display.drawLine(0, 10, 127, 10, SH110X_WHITE);
-    
-    display.setTextSize(3);
-    
-    if (item == 1) {
-        display.setTextSize(2);
-        const char* monthName = getMonthName(value);
-        display.setCursor(35, 25);
-        display.print(monthName);
-    } else {
-        display.setCursor(45, 25);
-        display.print(value);
-    }
-    
-    display.setTextSize(1);
-    display.setCursor(5, 55);
-    display.print(F("UP/DN:Change SEL:Save"));
-    
-    display.display();
-}
 
 // =============================================================================
 // SENSOR CALIBRATION MENU
@@ -471,7 +383,7 @@ void drawSensorCalibMenu(Adafruit_SH1106G& display, int selected,
     display.setTextSize(1);
     display.setTextColor(SH110X_WHITE);
     
-    display.setCursor(20, 0);
+    display.setCursor(15, 0);
     display.println(F("Sensor Calibration"));
     display.drawLine(0, 10, 127, 10, SH110X_WHITE);
     

@@ -42,60 +42,70 @@ void logData(SensorData& data, RTC_PCF8523& rtc, SystemSettings& settings,
     
     if (!status.rtcWorking) {
         Serial.println(F("WARNING: Logging without RTC timestamps"));
-        // Still log with millis() timestamp
     }
     
     if (status.sdWorking) {
-        // Try normal SD logging
+        // Use SIMPLE file structure that works with your SD card
         DateTime now = rtc.now();
-        char filename[30];
-        sprintf(filename, "/HIVE_DATA/%04d/%04d-%02d.CSV", 
-                now.year(), now.year(), now.month());
         
-        // Create directory if needed
-        SD.mkdir("/HIVE_DATA");
-        char dirPath[20];
-        sprintf(dirPath, "/HIVE_DATA/%04d", now.year());
-        SD.mkdir(dirPath);
+        // Simple filename: H2507.CSV (Hive + year(25) + month(07))
+        char filename[12];
+        sprintf(filename, "/H%02d%02d.CSV", now.year() % 100, now.month());
         
+        Serial.print(F("Logging to: "));
+        Serial.println(filename);
+        
+        // Check if file exists first
         bool fileExists = SD.exists(filename);
-        SDFile dataFile = SD.open(filename, FILE_WRITE);
+        
+        // Open the file for writing
+        File dataFile = SD.open(filename, FILE_WRITE);
         
         if (dataFile) {
-            if (!fileExists) {
+            // Write header if new file
+            if (!fileExists || dataFile.size() == 0) {
+                Serial.println(F("Writing CSV header"));
                 writeLogHeader(dataFile, now, settings);
             }
+            
+            // Write the data entry
             writeLogEntry(dataFile, now, data);
+            
+            // CRITICAL: Force write completion
+            dataFile.flush();
             dataFile.close();
+            
+            Serial.println(F("Log entry written successfully"));
             
             // Success - flush any buffered data
             if (hasBufferedData()) {
+                Serial.println(F("Flushing buffered data..."));
                 flushBufferedData(rtc, settings, status);
             }
             
         } else {
-            // SD write failed - mark as not working and buffer
+            // File creation failed
+            Serial.print(F("FAILED to create file: "));
+            Serial.println(filename);
             Serial.println(F("SD write failed - buffering data"));
             status.sdWorking = false;
             storeInBuffer(data);
         }
     } else {
-        // SD not working - store in buffer
+        // SD not working - store in buffer and retry periodically
         storeInBuffer(data);
         
-        // Periodically retry SD card
         static unsigned long lastSDRetry = 0;
         if (millis() - lastSDRetry > 60000) { // Retry every minute
             lastSDRetry = millis();
-            if (SD.begin(SD_CS_PIN)) {
+            Serial.println(F("Attempting SD card recovery..."));
+            if (SD.begin(10)) { // Use correct CS pin
                 Serial.println(F("SD card recovered!"));
                 status.sdWorking = true;
-                // Don't flush here - will flush on next successful write
             }
         }
     }
 }
-
 // =============================================================================
 // EMERGENCY DATA BUFFERING
 // =============================================================================

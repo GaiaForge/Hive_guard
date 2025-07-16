@@ -66,7 +66,7 @@ void setup() {
     Wire.setClock(100000);
     SPI.begin();
 
-    // Initialize display FIRST (only once - removed duplicate from original)
+    // Initialize display FIRST 
     if (display.begin(SCREEN_ADDRESS, true)) {
         systemStatus.displayWorking = true;
         showStartupScreen(display);
@@ -212,7 +212,12 @@ void setup() {
     
     Serial.println(F("=== System Ready ==="));
     systemStatus.systemReady = true;
-    
+
+    // Right after "System Ready"
+    Serial.println(F("=== Detailed Memory Analysis ==="));
+    printMemoryInfo();
+    initStackWatermark(); // For development debugging
+        
     // Take initial reading
     readAllSensors(bme, currentData, settings, systemStatus);
     checkAlerts(currentData, settings, systemStatus);
@@ -555,7 +560,13 @@ void handleTestingModeOperation(unsigned long currentTime) {
             Serial.print(F("Memory Usage: "));
             Serial.print(getMemoryUsagePercent());
             Serial.println(F("%"));
-            
+
+            // In handleTestingModeOperation(), with the other debug output:
+            Serial.print(F("Stack High Water: "));
+            Serial.print(getStackHighWaterMark());
+            Serial.println(F(" bytes"));
+            printMemoryInfo(); // Full breakdown
+                        
             lastPowerDebug = currentTime;
         }
     }
