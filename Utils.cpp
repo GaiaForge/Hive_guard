@@ -10,9 +10,9 @@
 #include "DataLogger.h"    // for SDLib::File
 #include <nrf.h>
 
-// =============================================================================
-// nRF52 MEMORY MANAGEMENT - ULTRA SIMPLE APPROACH
-// =============================================================================
+// ===========================
+// nRF52 MEMORY MANAGEMENT - 
+// ===========================
 
 // Simple Arduino-compatible stack pointer function
 static inline uint32_t get_stack_pointer(void) {

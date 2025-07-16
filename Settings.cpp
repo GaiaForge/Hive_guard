@@ -1,6 +1,6 @@
 /**
- * Settings.cpp
- * Settings management implementation
+ * Settings.cpp - COMPLETE FIXED VERSION
+ * Settings management implementation with proper LittleFS usage
  */
 
 #include "Settings.h"
@@ -8,8 +8,8 @@
 
 #ifdef NRF52_SERIES
   // Use namespace to avoid ambiguity
-  using LittleFSFile = Adafruit_LittleFS_Namespace::File;
-  LittleFSFile settingsFile(InternalFS);
+  using namespace Adafruit_LittleFS_Namespace;
+  // Don't create global file object - we'll create it locally in functions
 #endif
 
 // =============================================================================
@@ -58,7 +58,7 @@ uint16_t calculateChecksum(SystemSettings* s) {
 }
 
 // =============================================================================
-// LOAD SETTINGS
+// LOAD SETTINGS - FIXED VERSION
 // =============================================================================
 
 void loadSettings(SystemSettings& settings) {
@@ -66,24 +66,33 @@ void loadSettings(SystemSettings& settings) {
     // Initialize internal file system
     InternalFS.begin();
     
-    // Check if settings file exists
-    if (InternalFS.exists("/settings.dat")) {
-        settingsFile = InternalFS.open("/settings.dat", FILE_READ);
+    // Create file object locally to avoid ambiguity
+    Adafruit_LittleFS_Namespace::File settingsFile(InternalFS);
+    
+    // Check if settings file exists and can be opened
+    if (settingsFile.open("/settings.dat", FILE_O_READ)) {
+        Serial.println(F("Settings file found, reading..."));
         
-        if (settingsFile) {
-            // Read settings from file
-            settingsFile.read((uint8_t*)&settings, sizeof(SystemSettings));
-            settingsFile.close();
-            
-            // Validate settings
-            if (settings.magicNumber == SETTINGS_MAGIC_NUMBER && 
-                settings.checksum == calculateChecksum(&settings)) {
-                Serial.println(F("Settings loaded successfully"));
-                return;
-            } else {
-                Serial.println(F("Settings file corrupted"));
-            }
+        // Read settings from file
+        size_t bytesRead = settingsFile.read((uint8_t*)&settings, sizeof(SystemSettings));
+        settingsFile.close();
+        
+        Serial.print(F("Read ")); Serial.print(bytesRead); Serial.println(F(" bytes"));
+        
+        // Validate settings
+        if (settings.magicNumber == SETTINGS_MAGIC_NUMBER && 
+            settings.checksum == calculateChecksum(&settings)) {
+            Serial.println(F("Settings loaded successfully from internal flash"));
+            return;
+        } else {
+            Serial.println(F("Settings file corrupted - magic/checksum mismatch"));
+            Serial.print(F("Expected magic: 0x")); Serial.println(SETTINGS_MAGIC_NUMBER, HEX);
+            Serial.print(F("Got magic: 0x")); Serial.println(settings.magicNumber, HEX);
+            Serial.print(F("Expected checksum: 0x")); Serial.println(calculateChecksum(&settings), HEX);
+            Serial.print(F("Got checksum: 0x")); Serial.println(settings.checksum, HEX);
         }
+    } else {
+        Serial.println(F("Settings file not found"));
     }
 #endif
     
@@ -91,31 +100,77 @@ void loadSettings(SystemSettings& settings) {
     Serial.println(F("Loading default settings"));
     settings = getDefaultSettings();
     settings.checksum = calculateChecksum(&settings);
+    
+    // Save defaults to create the file
     saveSettings(settings);
 }
 
 // =============================================================================
-// SAVE SETTINGS
+// SAVE SETTINGS - FIXED VERSION
 // =============================================================================
 
 void saveSettings(SystemSettings& settings) {
+    Serial.println(F("saveSettings() called"));
+    
     // Update checksum
     settings.checksum = calculateChecksum(&settings);
+    Serial.print(F("Checksum calculated: 0x"));
+    Serial.println(settings.checksum, HEX);
     
 #ifdef NRF52_SERIES
-    // Open file for writing
-    settingsFile = InternalFS.open("/settings.dat", FILE_WRITE);
+    // Make sure file system is initialized
+    InternalFS.begin();
     
-    if (settingsFile) {
+    // Create file object locally to avoid ambiguity
+    Adafruit_LittleFS_Namespace::File settingsFile(InternalFS);
+    
+    Serial.println(F("Opening /settings.dat for writing..."));
+    
+    // Use the proper Adafruit LittleFS API
+    if (settingsFile.open("/settings.dat", FILE_O_WRITE)) {
+        Serial.println(F("Settings file opened successfully"));
+        
         // Write settings to file
-        settingsFile.write((uint8_t*)&settings, sizeof(SystemSettings));
+        size_t bytesWritten = settingsFile.write((uint8_t*)&settings, sizeof(SystemSettings));
         settingsFile.close();
-        Serial.println(F("Settings saved"));
+        
+        Serial.print(F("Bytes written: ")); Serial.println(bytesWritten);
+        
+        if (bytesWritten == sizeof(SystemSettings)) {
+            Serial.println(F("Settings saved successfully to internal flash"));
+        } else {
+            Serial.println(F("Warning: Incomplete write to settings file"));
+        }
     } else {
-        Serial.println(F("Failed to save settings"));
+        Serial.println(F("Failed to open settings file for writing"));
+        
+        // Try to format and retry once
+        Serial.println(F("Attempting to format internal filesystem..."));
+        if (InternalFS.format()) {
+            Serial.println(F("Format successful, reinitializing..."));
+            InternalFS.begin();
+            
+            // Create new file object after format
+            Adafruit_LittleFS_Namespace::File retryFile(InternalFS);
+            if (retryFile.open("/settings.dat", FILE_O_WRITE)) {
+                Serial.println(F("Settings file opened after format"));
+                size_t bytesWritten = retryFile.write((uint8_t*)&settings, sizeof(SystemSettings));
+                retryFile.close();
+                
+                if (bytesWritten == sizeof(SystemSettings)) {
+                    Serial.println(F("Settings saved successfully after format"));
+                } else {
+                    Serial.println(F("Failed to write settings even after format"));
+                }
+            } else {
+                Serial.println(F("Still cannot open settings file after format"));
+            }
+        } else {
+            Serial.println(F("Format failed - internal flash may be damaged"));
+        }
     }
 #else
-    Serial.println(F("Settings saved (in RAM only)"));
+    Serial.println(F("Settings saved (in RAM only - not nRF52 platform)"));
 #endif
 }
 
@@ -241,7 +296,6 @@ void exportSettingsToSD(SystemSettings& settings) {
     }
 }
 
-
 void clearUserData() {
     // Optional: Clear log files (be very careful with this!)
     // For safety, we'll just create a reset marker file instead
@@ -262,7 +316,7 @@ void clearUserData() {
 }
 
 // =============================================================================
-// SETTINGS INFORMATION DISPLAY - ADD THIS TO THE END OF Settings.cpp
+// SETTINGS INFORMATION DISPLAY
 // =============================================================================
 
 void printSettingsInfo(const SystemSettings& settings) {
@@ -348,4 +402,3 @@ void printSettingsInfo(const SystemSettings& settings) {
     
     Serial.println(F("========================\n"));
 }
-

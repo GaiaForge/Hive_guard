@@ -58,7 +58,7 @@ unsigned long lastFieldModeCheck = 0;
 
 void setup() {
     Serial.begin(115200);
-    delay(1000);
+    delay(5000);
     Serial.println(F("=== HiveGuard Hive Monitor v1.0 - Display Power Control Integrated ==="));
     
     // Initialize I2C and SPI first
@@ -260,7 +260,7 @@ void loop() {
         resetButtonStates(); // Clear other button states to prevent conflicts
     }
     
-    // : Check for field mode state changes
+    // Check for field mode state changes
     handleFieldModeTransitions();
     
     // Handle settings menu (highest priority) - UNCHANGED
@@ -271,77 +271,81 @@ void loop() {
 
     // Update Bluetooth manager
     bluetoothManager.update();
-    
-    // : Field mode operation logic (NO DISPLAY TIMEOUT)
-    if (powerManager.isFieldModeActive()) {
+  
+    // Check if we are in Field Mode AND the display has timed out (is off)
+    if (powerManager.isFieldModeActive() && !powerManager.isDisplayOn()) {
+        // STATE: Field Mode & Sleeping.
+        // Only run the low-power periodic functions when the display is off.
         handleFieldModeOperation(currentTime);
-        return; // Field mode has its own loop logic
-    }
-    
-    // Handle main navigation buttons - UNCHANGED (with activity tracking)
-    bool buttonPressed = false;
-    
-    if (wasButtonPressed(0)) { // UP
-        Serial.println(F("UP pressed"));
-        powerManager.handleUserActivity();
+    } else {
+        // STATE: Testing Mode OR Field Mode & Awake.
+        // This block now handles ALL interactive operations for both modes.
         
-        if (currentMode > 0) {
-            currentMode = (DisplayMode)(currentMode - 1);
-        } else {
-            currentMode = MODE_POWER;
+        // Handle main navigation buttons
+        bool buttonPressed = false;
+        
+        if (wasButtonPressed(0)) { // UP
+            Serial.println(F("UP pressed"));
+            powerManager.handleUserActivity();
+            
+            if (currentMode > 0) {
+                currentMode = (DisplayMode)(currentMode - 1);
+            } else {
+                currentMode = MODE_POWER;
+            }
+            buttonPressed = true;
         }
-        buttonPressed = true;
-    }
-    
-    if (wasButtonPressed(1)) { // DOWN  
-        Serial.println(F("DOWN pressed"));
-        powerManager.handleUserActivity();
         
-        if (currentMode < MODE_POWER) {
-            currentMode = (DisplayMode)(currentMode + 1);
-        } else {
+        if (wasButtonPressed(1)) { // DOWN  
+            Serial.println(F("DOWN pressed"));
+            powerManager.handleUserActivity();
+            
+            if (currentMode < MODE_POWER) {
+                currentMode = (DisplayMode)(currentMode + 1);
+            } else {
+                currentMode = MODE_DASHBOARD;
+            }
+            buttonPressed = true;
+        }
+        
+        if (wasButtonPressed(2)) { // SELECT
+            Serial.println(F("SELECT pressed"));
+            powerManager.handleUserActivity();
+            
+            if (currentMode == MODE_DASHBOARD) {
+                Serial.println(F("Entering settings menu"));
+                menuState.settingsMenuActive = true;
+                menuState.menuLevel = 0;
+                menuState.selectedItem = 0;
+                resetButtonStates();
+                return; // Return here as menu is now active
+            }
+            buttonPressed = true;
+        }
+        
+        if (wasButtonPressed(3)) { // BACK
+            Serial.println(F("BACK pressed"));
+            powerManager.handleUserActivity();
+            
             currentMode = MODE_DASHBOARD;
+            buttonPressed = true;
         }
-        buttonPressed = true;
-    }
-    
-    if (wasButtonPressed(2)) { // SELECT
-        Serial.println(F("SELECT pressed"));
-        powerManager.handleUserActivity();
-        
-        if (currentMode == MODE_DASHBOARD) {
-            Serial.println(F("Entering settings menu"));
-            menuState.settingsMenuActive = true;
-            menuState.menuLevel = 0;
-            menuState.selectedItem = 0;
-            resetButtonStates();
-            return;
-        }
-        buttonPressed = true;
-    }
-    
-    if (wasButtonPressed(3)) { // BACK
-        Serial.println(F("BACK pressed"));
-        powerManager.handleUserActivity();
-        
-        currentMode = MODE_DASHBOARD;
-        buttonPressed = true;
-    }
-    
-    // Force display update on button press - UNCHANGED
-    if (buttonPressed) {
-        Serial.print(F("Mode changed to: "));
-        Serial.println(currentMode);
-        updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
-                      currentSpectralFeatures, currentActivityTrend);
-        lastDisplayUpdate = currentTime;
-    }
-    
-    // : Normal (Testing) mode operation
-    handleTestingModeOperation(currentTime);
-}
 
-// : Enhanced function to handle field mode transitions
+        // Force display update on button press
+        if (buttonPressed) {
+            Serial.print(F("Mode changed to: "));
+            Serial.println(currentMode);
+            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
+                          currentSpectralFeatures, currentActivityTrend);
+            lastDisplayUpdate = currentTime;
+        }
+
+        // Run the normal, responsive sensor-reading and logging function
+        handleTestingModeOperation(currentTime);
+    }
+} // ← This closing brace was missing!
+
+// These functions should be OUTSIDE of loop(), not inside:
 void handleFieldModeTransitions() {
     bool fieldModeNow = powerManager.isFieldModeActive();
     
@@ -381,42 +385,15 @@ void handleFieldModeTransitions() {
     }
 }
 
-// Replace the audio processing section in handleFieldModeOperation() with this:
-
 void handleFieldModeOperation(unsigned long currentTime) {
     // Check for long press wake when display is off
-    if (!powerManager.isDisplayOn()) {
-        if (powerManager.checkForLongPressWake()) {
-            resetButtonStates();
-            return; // System is now awake, let next loop handle normal interaction
-        }
-        // When display is off, ignore all other button presses
-        resetButtonStates(); // Clear any normal presses
-    } else {
-        // Display is on - handle normal button presses for navigation/interaction
-        if (wasButtonPressed(0) || wasButtonPressed(1) || wasButtonPressed(2) || wasButtonPressed(3)) {
-            Serial.println(F("Button pressed in field mode - user interaction"));
-            powerManager.handleUserActivity(); // Resets timeout
-            
-            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
-                          currentSpectralFeatures, currentActivityTrend);
-            
-            resetButtonStates();
-            return; // Let main loop handle menu navigation normally
-        }
+    if (powerManager.checkForLongPressWake()) {
+        resetButtonStates();
+        return; // System is now awake, let next loop handle normal interaction
     }
-    
-    // Skip sensor readings if display is still on (during countdown period)
-    if (powerManager.isDisplayOn()) {
-        // During countdown: just update display with current (stale) data, no sensor reads
-        if (currentTime - lastDisplayUpdate >= 5000) { // Every 5 seconds
-            updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
-                          currentSpectralFeatures, currentActivityTrend);
-            lastDisplayUpdate = currentTime;
-        }
-        return; // Skip all sensor reading logic below
-    }
-    
+    // When display is off, ignore all other button presses
+    resetButtonStates(); // Clear any normal presses
+
     // Check if it's time to take a reading
     if (powerManager.shouldTakeReading()) {
         Serial.println(F("\n--- Field Mode: Taking Scheduled Reading ---"));
@@ -440,7 +417,7 @@ void handleFieldModeOperation(unsigned long currentTime) {
         Serial.print(currentData.batteryVoltage, 2);
         Serial.println(F("V"));
         
-        // Process audio if available - CLEAN VERSION
+        // Process audio if available
         if (systemStatus.pdmWorking) {
             // Collect several samples for better analysis
             for (int i = 0; i < 50; i++) {
@@ -512,7 +489,6 @@ void handleFieldModeOperation(unsigned long currentTime) {
     }
 }
 
-// Also update the handleTestingModeOperation function:
 
 void handleTestingModeOperation(unsigned long currentTime) {
     // Read sensors every 5 seconds - UNCHANGED
