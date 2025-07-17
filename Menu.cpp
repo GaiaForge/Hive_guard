@@ -777,23 +777,54 @@ void drawBeePresetMenu(Adafruit_SH1106G& display, int selected, SystemSettings& 
     display.print(F("Current: "));
     display.print(getBeeTypeName(currentType));
     
-    // List available presets (skip custom)
-    for (int i = 0; i < 3 && i < (NUM_BEE_PRESETS - 1); i++) {
-        int presetIdx = i + 1; // +1 to skip custom
+    // Calculate scrolling - show 3 items at a time
+    const int visibleItems = 3;
+    const int totalItems = NUM_BEE_PRESETS - 1; // Skip custom in selection (index 0)
+    
+    int startItem = 0;
+    if (selected >= visibleItems) {
+        startItem = selected - visibleItems + 1;
+    }
+    
+    // Ensure we don't scroll past the end
+    if (startItem + visibleItems > totalItems) {
+        startItem = totalItems - visibleItems;
+    }
+    if (startItem < 0) startItem = 0;
+    
+    // Draw visible items (skip custom, show others)
+    for (int i = 0; i < visibleItems && (startItem + i) < totalItems; i++) {
+        int presetIdx = startItem + i + 1; // +1 to skip custom (index 0)
         int y = 26 + (i * 12);
         
-        if (i == selected) {
+        if ((startItem + i) == selected) {
             display.setCursor(0, y);
             display.print(F(">"));
         }
         
         display.setCursor(12, y);
         display.print(BEE_PRESETS[presetIdx].name);
+        
+        // Show description for selected item
+        if ((startItem + i) == selected) {
+            display.setCursor(0, 56);
+            display.setTextSize(1);
+            display.print(BEE_PRESETS[presetIdx].description);
+        }
+    }
+    
+    // Show scroll indicators if needed
+    if (startItem > 0) {
+        display.setCursor(120, 26);
+        display.print(F("↑")); // Up arrow
+    }
+    if (startItem + visibleItems < totalItems) {
+        display.setCursor(120, 50);
+        display.print(F("↓")); // Down arrow
     }
     
     display.display();
 }
-
 // =============================================================================
 // ALERT THRESHOLDS MENU
 // =============================================================================
