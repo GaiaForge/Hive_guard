@@ -1,6 +1,6 @@
 /**
  * PowerManager.h
- * Power management system header - WITH BLUETOOTH INTEGRATION AND DEEP SLEEP
+ * Power management system header - WITH TRUE nRF52 DEEP SLEEP
  */
 
 #ifndef POWER_MANAGER_H
@@ -28,8 +28,9 @@ enum WakeUpSource {
     WAKE_TIMER = 1,
     WAKE_RTC = 2,
     WAKE_EXTERNAL = 3,
-    WAKE_BLUETOOTH_BUTTON = 4,  // NEW: Bluetooth button pressed
-    WAKE_UNKNOWN = 5
+    WAKE_BLUETOOTH_BUTTON = 4,
+    WAKE_UNKNOWN = 5,
+    WAKE_POWER_ON = 6       // NEW: Normal power-on boot
 };
 
 enum ComponentPowerState {
@@ -53,11 +54,11 @@ struct PowerStatus {
     unsigned long displayTimeoutMs;
     unsigned long lastUserActivity;
     
-    // NEW: Separate Bluetooth timing
-    bool bluetoothOn;           // Current Bluetooth state
-    unsigned long bluetoothTimeoutMs;  // Same duration as display timeout
-    unsigned long lastBluetoothActivity; // Last Bluetooth connection/disconnection
-    bool bluetoothManuallyActivated;    // Was Bluetooth turned on by button?
+    // Bluetooth timing
+    bool bluetoothOn;           
+    unsigned long bluetoothTimeoutMs;  
+    unsigned long lastBluetoothActivity; 
+    bool bluetoothManuallyActivated;    
     
     unsigned long nextSleepTime;
     unsigned long totalUptime;
@@ -69,7 +70,12 @@ struct PowerStatus {
     ComponentPowerState displayState;
     ComponentPowerState sensorState;
     ComponentPowerState audioState;
-    ComponentPowerState bluetoothState;  // NEW: Bluetooth power state
+    ComponentPowerState bluetoothState;
+    
+    // NEW: Deep sleep tracking
+    bool deepSleepCapable;      // Can we use true deep sleep?
+    uint32_t deepSleepCycles;   // Count of deep sleep cycles
+    bool wakeFromDeepSleep;     // Did we just wake from deep sleep?
 };
 
 struct PowerSettings {
@@ -78,6 +84,7 @@ struct PowerSettings {
     uint8_t sleepIntervalMin;      // Deep sleep interval in minutes
     bool autoFieldMode;            // Auto-enable field mode when battery low
     uint8_t criticalBatteryLevel;  // Battery level to enter critical mode
+    bool useDeepSleep;             // NEW: Enable true deep sleep
 };
 
 // =============================================================================
@@ -90,30 +97,38 @@ private:
     PowerSettings settings;
     SystemStatus* systemStatus;
     SystemSettings* systemSettings;
-    BluetoothManager* bluetoothManager;  // NEW: Reference to Bluetooth manager
+    BluetoothManager* bluetoothManager;
     
     // Internal timing
     unsigned long lastPowerCheck;
     unsigned long displayOffTime;
     unsigned long lastSleepTime;
-    bool rtcInterruptWorking;  // Track if RTC interrupt is functional
-
+    bool rtcInterruptWorking;
+    
     // Power consumption estimates (mA)
     static const float POWER_TESTING_MA;
     static const float POWER_DISPLAY_MA;
     static const float POWER_SENSORS_MA;
     static const float POWER_AUDIO_MA;
-    static const float POWER_BLUETOOTH_MA;  // NEW: Bluetooth power consumption
+    static const float POWER_BLUETOOTH_MA;
     static const float POWER_SLEEP_MA;
+    static const float POWER_DEEP_SLEEP_MA;  // NEW: True deep sleep power
     
-    // Deep sleep management - PRIVATE
+    // Deep sleep management
+    void setupWakeupPin();
+    void programRTCAlarm(uint8_t targetMinute);
+    void clearRTCAlarmFlag();
+    uint8_t bin2bcd(uint8_t val);
+    bool initializeDeepSleep();
+    
+    // Legacy sleep methods (for fallback)
     void enterNRF52Sleep();
     void configureRTCWakeup(uint32_t wakeupTimeUnix);
     bool handleRTCWakeup();
     void setupRTCInterrupt();
-    static void rtcInterruptHandler();  // Static interrupt handler
-
-    // Wake-up state tracking - PRIVATE
+    static void rtcInterruptHandler();
+    
+    // Wake-up state tracking
     volatile bool wakeupFromRTC;
     volatile bool wakeupFromButton;
     uint32_t scheduledWakeTime;
@@ -121,24 +136,29 @@ private:
     // Internal methods    
     void calculateRuntimeEstimate(float batteryVoltage);
     void handleDisplayTimeout();
-    void handleBluetoothTimeout();  // NEW: Handle Bluetooth timeout
+    void handleBluetoothTimeout();
     void configureButtonWakeup();
     void checkFieldModeTimeout(unsigned long currentTime);  
-    void checkBluetoothTimeout(unsigned long currentTime);  // NEW: Check Bluetooth timeout
+    void checkBluetoothTimeout(unsigned long currentTime);
     
     // Long press wake detection
     unsigned long longPressStartTime;
     bool longPressDetected;
-    static const unsigned long LONG_PRESS_WAKE_TIME = 1000; // 1 second for wake
+    static const unsigned long LONG_PRESS_WAKE_TIME = 1000;
         
 public:
     PowerManager();
     
     // Initialization
     void initialize(SystemStatus* sysStatus, SystemSettings* sysSettings);
-    void setBluetoothManager(BluetoothManager* btManager);  // NEW: Set Bluetooth manager reference
+    void setBluetoothManager(BluetoothManager* btManager);
     void loadPowerSettings();
     void savePowerSettings();
+    
+    // NEW: Deep sleep initialization and detection
+    void initializeWakeDetection(WakeUpSource bootReason);
+    bool canUseDeepSleep() const;
+    void setDeepSleepEnabled(bool enabled);
 
     // Hardware display power control 
     void initializeDisplayPower();
@@ -148,19 +168,19 @@ public:
     void resetDisplayTimeout();
     unsigned long getDisplayTimeRemaining() const;
     
-    // NEW: Bluetooth power control
-    void activateBluetooth();       // Turn on Bluetooth (manual button press)
-    void deactivateBluetooth();     // Turn off Bluetooth (timeout or manual)
+    // Bluetooth power control
+    void activateBluetooth();
+    void deactivateBluetooth();
     bool isBluetoothOn() const;
-    void handleBluetoothConnection();    // Reset Bluetooth timer on connection
-    void handleBluetoothDisconnection(); // Start Bluetooth countdown on disconnect
+    void handleBluetoothConnection();
+    void handleBluetoothDisconnection();
     unsigned long getBluetoothTimeRemaining() const;
     
     // Core power management
     void update();
-    void handleUserActivity();              // Resets display timer only
-    void handleBluetoothActivity();         // NEW: Resets Bluetooth timer only
-    void handleBluetoothButtonPress();      // NEW: Handle external Bluetooth button
+    void handleUserActivity();
+    void handleBluetoothActivity();
+    void handleBluetoothButtonPress();
     void handleWakeUp(WakeUpSource source);
     bool shouldEnterSleep();
     void configureWakeupSources();
@@ -170,7 +190,6 @@ public:
     void disableFieldMode();
     bool isFieldModeActive() const;
     void updatePowerMode(float batteryVoltage);
-    
 
     // Field mode sleep management
     bool shouldTakeReading() const;
@@ -185,24 +204,26 @@ public:
     void powerUpSensors();
     void powerDownAudio();
     void powerUpAudio();
-    void powerDownBluetooth();      // NEW: Power down Bluetooth
-    void powerUpBluetooth();        // NEW: Power up Bluetooth
+    void powerDownBluetooth();
+    void powerUpBluetooth();
     void powerDownNonEssential();
     void powerUpAll();
     
-    // Sleep management
+    // Sleep management - UPDATED
     void enterDeepSleep(uint32_t sleepTimeMs);
+    void enterDeepSleepMode();      // NEW: True deep sleep (never returns)
     void prepareSleep();
     void wakeFromSleep();
     bool canEnterSleep() const;
     void enterFieldSleep();
     void wakeFromFieldSleep(); 
-    void clearRTCAlarmFlags();  // clear RTC alarm state
+    void clearRTCAlarmFlags();
     bool isRTCInterruptWorking() const { return rtcInterruptWorking; }
     
-    // Deep sleep status - PUBLIC
+    // Deep sleep status
     bool isWakeupFromRTC() const;
     bool isWakeupFromButton() const;
+    bool didWakeFromDeepSleep() const { return status.wakeFromDeepSleep; }
     
     // Battery and power monitoring
     PowerMode getCurrentPowerMode() const;
@@ -210,11 +231,9 @@ public:
     float getDailyUsageEstimate() const;
     unsigned long getUptime() const;
     uint32_t getSleepCycles() const;
+    uint32_t getDeepSleepCycles() const { return status.deepSleepCycles; }
     uint32_t getButtonPresses() const;
 
-    // Memory management
-    void printMemoryStatus() const;
-    
     // Settings management
     void setDisplayTimeout(uint8_t minutes);
     void setFieldMode(bool enabled);
@@ -247,5 +266,8 @@ bool getComponentPowerState(uint8_t component);
 // Power mode helpers
 const char* powerModeToString(PowerMode mode);
 PowerMode batteryToPowerMode(float voltage);
+
+// NEW: Wake-up detection helper
+WakeUpSource detectWakeupSource();
 
 #endif // POWER_MANAGER_H
