@@ -54,6 +54,7 @@ struct PowerStatus {
     unsigned long displayTimeoutMs;
     unsigned long lastUserActivity;
     
+    
     // Bluetooth timing
     bool bluetoothOn;           
     unsigned long bluetoothTimeoutMs;  

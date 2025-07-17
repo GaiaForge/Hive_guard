@@ -1068,12 +1068,18 @@ void PowerManager::powerDownNonEssential() {
     Serial.println(F("Powering down non-essential components for deep sleep"));
     status.sensorState = COMP_POWER_SLEEP;
     status.audioState = COMP_POWER_SLEEP;
+    
+    // Use your existing method:
+    powerDownBluetooth();
 }
 
 void PowerManager::powerUpAll() {
     Serial.println(F("Powering up all components after wake"));
     status.sensorState = COMP_POWER_ON;
     status.audioState = COMP_POWER_ON;
+    
+    // Use your existing method:
+    powerUpBluetooth();
 }
 
 void PowerManager::powerDownSensors() {
