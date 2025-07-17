@@ -203,14 +203,73 @@ struct DailyPattern {
 
 struct BufferedReading {
     uint32_t timestamp;
+    
+    // Basic sensor data
     float temperature;
     float humidity;
     float pressure;
-    uint16_t frequency;
-    uint8_t soundLevel;
-    uint8_t beeState;
     float batteryVoltage;
     uint8_t alertFlags;
+    
+    // FULL Audio ML Data - ALL OF IT!
+    uint16_t dominantFreq;
+    uint8_t soundLevel;
+    uint8_t beeState;
+    
+    // Frequency band analysis (6 bands)
+    float bandEnergy0_200Hz;
+    float bandEnergy200_400Hz;
+    float bandEnergy400_600Hz;
+    float bandEnergy600_800Hz;
+    float bandEnergy800_1000Hz;
+    float bandEnergy1000PlusHz;
+    
+    // Advanced spectral features
+    float spectralCentroid;
+    float spectralRolloff;
+    float spectralFlux;
+    float spectralSpread;
+    float spectralSkewness;
+    float spectralKurtosis;
+    float zeroCrossingRate;
+    float peakToAvgRatio;
+    float harmonicity;
+    
+    // Temporal ML features
+    float shortTermEnergy;
+    float midTermEnergy;
+    float longTermEnergy;
+    float energyEntropy;
+    
+    // Time-based cyclical features for ML
+    float hourOfDaySin;
+    float hourOfDayCos;
+    float dayOfYearSin;
+    float dayOfYearCos;
+    
+    // Context and quality
+    uint8_t contextFlags;
+    float ambientNoiseLevel;
+    uint8_t signalQuality;
+    
+    // Behavioral indicators
+    bool queenDetected;
+    uint8_t abscondingRisk;
+    float activityIncrease;
+
+    //  Environmental ML Features 
+    float dewPoint;
+    float vapourPressureDeficit;     // VPD - critical for bee activity
+    float heatIndex;
+    float temperatureRate;           // °C per hour
+    float humidityRate;              // % per hour  
+    float pressureRate;              // hPa per hour
+    float foragingComfortIndex;      // 0-100 combined score
+    float environmentalStress;       // 0-100 stress level
+    
+    bool analysisValid;
+
+    
 };
 
 // Buffer for 1 hour of readings at 5-min intervals = 12 readings max

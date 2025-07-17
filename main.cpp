@@ -1,6 +1,7 @@
+
 /**
  * main.cpp 
- * HiveGuard Hive Monitor System V1.0 - Fixed Settings Storage + Reverted Display Timeout
+ * HiveGuard Hive Monitor System V2.0 - WITH TRUE DEEP SLEEP
  */
 
 #include "Config.h"
@@ -16,6 +17,12 @@
 #include "PowerManager.h"
 #include "FieldModeBuffer.h"
 #include "Bluetooth.h"
+#include <Wire.h>  // Required for I2C communication with PCF8523
+
+#ifdef NRF52_SERIES
+#include <nrf.h>
+#include <nrf_power.h>
+#endif
 
 // State machine handlers
 void handleAwakeState(unsigned long currentTime);
@@ -35,9 +42,11 @@ enum SystemState {
 };
 
 // Global state variables
+WakeUpSource wakeUpReason = WAKE_UNKNOWN;
 SystemState currentSystemState = STATE_AWAKE;
 unsigned long stateChangeTime = 0;
 bool readingInProgress = false;
+
 
 // Hardware objects
 Adafruit_SH1106G display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
@@ -52,9 +61,17 @@ SensorData currentData;
 DisplayMode currentMode = MODE_DASHBOARD;
 MenuState menuState = {false, 0, 0, 0, 0.0, 0};
 
-// Audio data (simplified)
+// Audio data 
 SpectralFeatures currentSpectralFeatures = {0};
 ActivityTrend currentActivityTrend = {0};
+
+// ADD THESE LINES - Environmental history tracking for ML
+float lastTemperature = 0;
+float lastHumidity = 0;
+float lastPressure = 0;
+unsigned long lastEnvReading = 0;
+bool envHistoryValid = false;
+
 
 // : Power Manager and Field Buffer
 PowerManager powerManager;
@@ -77,194 +94,269 @@ bool wasInFieldMode = false;
 unsigned long fieldModeStartTime = 0;
 unsigned long lastFieldModeCheck = 0;
 
+WakeUpSource detectWakeupSource() {
+#ifdef NRF52_SERIES
+    // Check if we have access to nRF52 power registers
+    #ifdef NRF_POWER
+        // Check the reset reason register FIRST thing in setup()
+        uint32_t reset_reason = NRF_POWER->RESETREAS;
+        NRF_POWER->RESETREAS = 0xFFFFFFFF; // Clear for next boot
+        
+        // Use hex values instead of undefined constants
+        if (reset_reason & 0x00040000) {  // NRF_POWER_RESETREAS_OFF_Msk equivalent
+            // Woke from System OFF sleep via GPIO pin
+            Serial.print(F("Reset reason: System OFF wake (0x"));
+            Serial.print(reset_reason, HEX);
+            Serial.println(F(")"));
+            return WAKE_RTC;
+        } else if (reset_reason & 0x00000001) {  // NRF_POWER_RESETREAS_RESETPIN_Msk equivalent
+            // Reset pin pressed
+            Serial.print(F("Reset reason: Reset pin (0x"));
+            Serial.print(reset_reason, HEX);
+            Serial.println(F(")"));
+            return WAKE_POWER_ON;
+        } else if (reset_reason & 0x00000002) {  // NRF_POWER_RESETREAS_DOG_Msk equivalent
+            // Watchdog reset
+            Serial.print(F("Reset reason: Watchdog (0x"));
+            Serial.print(reset_reason, HEX);
+            Serial.println(F(")"));
+            return WAKE_UNKNOWN;
+        } else {
+            // Normal power-on or other reason
+            Serial.print(F("Reset reason: Power-on (0x"));
+            Serial.print(reset_reason, HEX);
+            Serial.println(")");
+            return WAKE_POWER_ON;
+        }
+    #else
+        Serial.println("NRF_POWER not available - assuming power-on");
+        return WAKE_POWER_ON;
+    #endif
+#else
+    Serial.println("Non-nRF52 platform - assuming power-on");
+    return WAKE_POWER_ON;  // Non-nRF52 platforms
+#endif
+}
+
 void setup() {
-    Serial.begin(115200);
-    delay(5000);
-    Serial.println(F("=== HiveGuard Hive Monitor v1.0 - Display Power Control Integrated ==="));
+    // *** DETECT WAKE-UP REASON FIRST ***
+    wakeUpReason = detectWakeupSource();
     
-    // Initialize I2C and SPI first
+    Serial.begin(115200);
+    delay(1000); // Shorter delay for wake-ups
+    
+    // Print wake-up information
+    Serial.println(F("=== HiveGuard Hive Monitor v2.0 - Deep Sleep Edition ==="));
+    Serial.print(F("Wake-up reason: "));
+    switch (wakeUpReason) {
+        case WAKE_RTC:
+            Serial.println(F("RTC ALARM (scheduled reading)"));
+            break;
+        case WAKE_POWER_ON:
+            Serial.println(F("POWER ON (normal boot)"));
+            break;
+        default:
+            Serial.println(F("UNKNOWN"));
+            break;
+    }
+    
+    // Initialize I2C and SPI
     Wire.begin();
-    Wire.setClock(100000);
+    Wire.setClock(100000);  // 100kHz for reliable PCF8523 communication
     SPI.begin();
 
-    // Initialize display FIRST 
+    // Initialize Power Manager early (before retained state check)
+    powerManager.initialize(&systemStatus, &settings);
+    
+    // *** CHECK FOR RETAINED STATE RESTORATION ***
+    bool restoredFromSleep = false;
+    if (wakeUpReason == WAKE_RTC) {
+        restoredFromSleep = powerManager.restoreRetainedState();
+    }
+    
+    // If we restored from deep sleep, skip most of the normal initialization
+    if (restoredFromSleep) {
+        Serial.println(F("=== QUICK WAKE FROM DEEP SLEEP ==="));
+        
+        // Initialize only essential components for reading
+        if (rtc.begin()) {
+            systemStatus.rtcWorking = true;
+            Serial.println(F("RTC: OK (quick init)"));
+            
+            // Ensure RTC is running
+            if (!rtc.isrunning()) {
+                Serial.println(F("Starting RTC oscillator"));
+                rtc.start();
+            }
+            
+            // Initialize deep sleep capability for quick wake
+            if (powerManager.initializeDeepSleep()) {
+                Serial.println(F("Deep sleep: ENABLED (quick wake)"));
+            }
+        }
+        
+        // Quick SD check
+        if (SD.begin(SD_CS_PIN)) {
+            systemStatus.sdWorking = true;
+            Serial.println(F("SD: OK (quick init)"));
+        } else {
+            systemStatus.sdWorking = false;
+            Serial.println(F("SD: FAILED (quick init)"));
+        }
+        
+        // Initialize sensors
+        initializeSensors(bme, systemStatus);
+        Serial.println(F("Sensors: OK (quick init)"));
+        
+        // Load settings quickly
+        loadSettings(settings);
+        
+        // Initialize field buffer
+        fieldBuffer.clearBuffer();
+        
+        // Take reading and go back to sleep
+        currentSystemState = STATE_SCHEDULED_WAKE;
+        stateChangeTime = millis();
+        Serial.println(F("=== QUICK WAKE COMPLETE ==="));
+        return;
+    }
+    
+    // *** NORMAL BOOT SEQUENCE ***
+    Serial.println(F("=== NORMAL BOOT SEQUENCE ==="));
+    
+    // Clear any stale retained state
+    powerManager.clearRetainedState();
+
+    // Initialize display with different behavior based on wake reason
     if (display.begin(SCREEN_ADDRESS, true)) {
         systemStatus.displayWorking = true;
-        showStartupScreen(display);
-        Serial.println(F("Display: OK (hardware power control enabled)"));
+        
+        if (wakeUpReason == WAKE_RTC) {
+            // Quick wake screen for scheduled readings (fallback case)
+            display.clearDisplay();
+            display.setTextSize(1);
+            display.setTextColor(SH110X_WHITE);
+            display.setCursor(20, 20);
+            display.println(F("Scheduled Wake"));
+            display.setCursor(10, 35);
+            display.println(F("Taking readings..."));
+            display.display();
+        } else {
+            // Full startup screen for normal boot
+            showStartupScreen(display);
+            delay(2000);
+            showSensorDiagnosticsScreen(display, systemStatus);
+        }
+        
+        Serial.println(F("Display: OK"));
     } else {
         Serial.println(F("Display: FAILED"));
         systemStatus.displayWorking = false;
     }
-    delay(2000); // Show startup screen for 2 seconds
-    
-    // NEW: Show sensor diagnostics screen
-    if (systemStatus.displayWorking) {
-        showSensorDiagnosticsScreen(display, systemStatus);
-        delay(500); // Brief pause before starting diagnostics
-    }
-    
-    // Initialize SD card BEFORE loading settings - WITH DIAGNOSTIC DISPLAY
+
+    // Initialize SD card (quick check for wake-ups)
     Serial.print(F("SD Card: "));
-    if (systemStatus.displayWorking) {
-        checkSDCardAtStartup(display, systemStatus); // This function calls updateDiagnosticLine
+    if (systemStatus.displayWorking && wakeUpReason == WAKE_POWER_ON) {
+        checkSDCardAtStartup(display, systemStatus);
     } else {
-        // Fallback if display failed
+        // Quick SD check for wake-ups
         if (SD.begin(SD_CS_PIN)) {
             systemStatus.sdWorking = true;
             Serial.println(F("OK"));
         } else {
             systemStatus.sdWorking = false;
-            Serial.println(F("FAILED - settings will not persist!"));
+            Serial.println(F("FAILED"));
         }
     }
     
-    // Load settings from SD card
+    // Load settings
     Serial.println(F("Loading settings..."));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Loading settings...");
     loadSettings(settings);
-    printSettingsInfo(settings);
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Settings loaded");
-    delay(500);
-    
-    // Create log file if SD is working
-    if (systemStatus.sdWorking) {
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "Creating log file...");
-        createLogFile(rtc, systemStatus);
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "Log file ready");
-    } else {
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "SD: Logging disabled");
-    }
-    delay(500);
     
     // Initialize RTC
-    Serial.print(F("RTC: "));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Initializing RTC...");
     if (rtc.begin()) {
         systemStatus.rtcWorking = true;
-        Serial.println(F("OK"));
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "RTC: OK");
+        Serial.println(F("RTC: OK"));
         
-        if (rtc.lostPower()) {
+        // Only set time on normal boot, not on wake-up
+        if (rtc.lostPower() && wakeUpReason == WAKE_POWER_ON) {
             Serial.println(F("RTC lost power, setting time"));
-            if (systemStatus.displayWorking) updateDiagnosticLine(display, "RTC: Setting time");
             rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
         }
         
-        if (!rtc.initialized() || rtc.lostPower()) {
-            rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+        // Ensure RTC is running
+        if (!rtc.isrunning()) {
+            Serial.println(F("Starting RTC oscillator"));
             rtc.start();
         }
+        
+        // *** NOW INITIALIZE DEEP SLEEP CAPABILITY AFTER RTC IS READY ***
+        Serial.println(F("Checking deep sleep capability..."));
+        if (powerManager.initializeDeepSleep()) {
+            Serial.println(F("Deep sleep: ENABLED"));
+        } else {
+            Serial.println(F("Deep sleep: DISABLED (using polling fallback)"));
+        }
     } else {
-        Serial.println(F("FAILED"));
+        Serial.println(F("RTC: FAILED"));
         systemStatus.rtcWorking = false;
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "RTC: FAILED");
     }
-    delay(500);
     
     // Initialize sensors
-    Serial.print(F("BME280: "));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Initializing BME280...");
     initializeSensors(bme, systemStatus);
-    if (systemStatus.bmeWorking) {
-        Serial.println(F("OK"));
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "BME280: OK");
-    } else {
-        Serial.println(F("FAILED"));
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "BME280: FAILED");
-    }
-    delay(500);
     
-    // Initialize audio (with proper detection)
-    Serial.print(F("Audio: "));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Checking microphone...");
-    initializeAudio(systemStatus);
-    if (systemStatus.pdmWorking) {
-        Serial.println(F("Microphone detected"));
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "Microphone: OK");
-    } else {
-        Serial.println(F("No microphone - audio disabled"));
-        if (systemStatus.displayWorking) updateDiagnosticLine(display, "Microphone: NONE");
+    // Initialize audio (only for normal boot to save time)
+    if (wakeUpReason == WAKE_POWER_ON) {
+        initializeAudio(systemStatus);
     }
-    delay(500);
-
-
-        
+    
     // Initialize buttons
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Initializing buttons...");
     pinMode(BTN_UP, INPUT_PULLUP);
     pinMode(BTN_DOWN, INPUT_PULLUP);
     pinMode(BTN_SELECT, INPUT_PULLUP);
     pinMode(BTN_BACK, INPUT_PULLUP);
     Serial.println(F("Buttons: OK"));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Buttons: OK");
-    delay(500);
     
-    // Initialize Power Manager with fixed settings
-    Serial.print(F("Power Manager: "));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Power Manager...");
-    powerManager.initialize(&systemStatus, &settings);
-    Serial.println(F("OK - Settings Persistence Fixed"));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Power Manager: OK");
-    delay(500);
-
+    // *** CRITICAL: Initialize wake detection ***
+    powerManager.initializeWakeDetection(wakeUpReason);
+    
     // Initialize Bluetooth Manager
-    Serial.print(F("Bluetooth Manager: "));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Bluetooth Manager...");
     bluetoothManager.initialize(&systemStatus, &settings);
-    Serial.println(F("OK"));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Bluetooth: OK");
-    delay(500);
-    
-    // Link PowerManager with BluetoothManager
     powerManager.setBluetoothManager(&bluetoothManager);
     
     // Initialize field buffer
-    Serial.println(F("Field Buffer: Initialized"));
-    if (systemStatus.displayWorking) updateDiagnosticLine(display, "Field Buffer: OK");
     fieldBuffer.clearBuffer();
-    delay(500);
-    
-    // Show completion message
-    if (systemStatus.displayWorking) {
-        updateDiagnosticLine(display, "Initialization complete!");
-        delay(1500); // Show completion for 1.5 seconds
-    }
     
     Serial.println(F("=== System Ready ==="));
     systemStatus.systemReady = true;
-
-    // Right after "System Ready"
-    Serial.println(F("=== Detailed Memory Analysis ==="));
-    printMemoryInfo();
-    initStackWatermark(); // For development debugging
-        
+    
     // Take initial reading
     readAllSensors(bme, currentData, settings, systemStatus);
     checkAlerts(currentData, settings, systemStatus);
     
-    // Set initial wake time for field mode
-    if (systemStatus.rtcWorking) {
-        powerManager.updateNextWakeTime(settings.logInterval);
+    // *** SET INITIAL STATE BASED ON WAKE REASON ***
+    if (wakeUpReason == WAKE_RTC) {
+        Serial.println(F("Entering scheduled wake state for sensor reading"));
+        currentSystemState = STATE_SCHEDULED_WAKE;
+        stateChangeTime = millis();
+        
+        // For deep sleep wake-ups, keep display off
+        if (powerManager.didWakeFromDeepSleep()) {
+            powerManager.turnOffDisplay();
+        }
+    } else {
+        Serial.println(F("Entering normal awake state"));
+        currentSystemState = STATE_AWAKE;
+        stateChangeTime = millis();
+        
+        // Update display for normal boot
+        updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
+                      currentSpectralFeatures, currentActivityTrend);
     }
     
-    // Update display - switch to main dashboard
-    updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
-                  currentSpectralFeatures, currentActivityTrend);
-    
-    // Show initial power status with settings info
-    Serial.println(F("\n=== Initial Power Status ==="));
-    powerManager.printPowerStatus();
-    Serial.print(F("Field Mode from Settings: "));
-    Serial.println(settings.fieldModeEnabled ? "YES" : "NO");
-    Serial.print(F("Display Timeout from Settings: "));
-    Serial.print(settings.displayTimeoutMin);
-    Serial.println(F(" minutes"));
-    
-    // Export settings for backup/verification
-    if (systemStatus.sdWorking) {
-        exportSettingsToSD(settings);
-        Serial.println(F("Settings exported for verification"));
+    // Show power status (only for normal boot)
+    if (wakeUpReason == WAKE_POWER_ON) {
+        powerManager.printPowerStatus();
     }
 }
 
@@ -313,95 +405,113 @@ void loop() {
 // =============================================================================
 
 void handleAwakeState(unsigned long currentTime) {
-    // Handle settings menu (highest priority)
-    if (menuState.settingsMenuActive) {
-        handleSettingsMenu(display, menuState, settings, rtc, currentData, systemStatus);
-        return; // Skip everything else when in menu
-    }
+   // Handle settings menu (highest priority)
+   if (menuState.settingsMenuActive) {
+       handleSettingsMenu(display, menuState, settings, rtc, currentData, systemStatus);
+       return; // Skip everything else when in menu
+   }
 
-    // Update Bluetooth manager
-    bluetoothManager.update();
+   // Update Bluetooth manager
+   bluetoothManager.update();
 
-    // Handle main navigation buttons
-    bool buttonPressed = false;
-    
-    if (wasButtonPressed(0)) { // UP
-        Serial.println(F("UP pressed"));
-        powerManager.handleUserActivity();
-        
-        if (currentMode > 0) {
-            currentMode = (DisplayMode)(currentMode - 1);
-        } else {
-            currentMode = MODE_POWER;
-        }
-        buttonPressed = true;
-    }
-    
-    if (wasButtonPressed(1)) { // DOWN  
-        Serial.println(F("DOWN pressed"));
-        powerManager.handleUserActivity();
-        
-        if (currentMode < MODE_POWER) {
-            currentMode = (DisplayMode)(currentMode + 1);
-        } else {
-            currentMode = MODE_DASHBOARD;
-        }
-        buttonPressed = true;
-    }
-    
-    if (wasButtonPressed(2)) { // SELECT
-        Serial.println(F("SELECT pressed"));
-        powerManager.handleUserActivity();
-        
-        if (currentMode == MODE_DASHBOARD) {
-            Serial.println(F("Entering settings menu"));
-            menuState.settingsMenuActive = true;
-            menuState.menuLevel = 0;
-            menuState.selectedItem = 0;
-            resetButtonStates();
-            return;
-        }
-        buttonPressed = true;
-    }
-    
-    if (wasButtonPressed(3)) { // BACK
-        Serial.println(F("BACK pressed"));
-        powerManager.handleUserActivity();
-        currentMode = MODE_DASHBOARD;
-        buttonPressed = true;
-    }
+   // Handle main navigation buttons
+   bool buttonPressed = false;
+   
+   if (wasButtonPressed(0)) { // UP
+       Serial.println(F("UP pressed"));
+       powerManager.handleUserActivity();
+       
+       if (currentMode > 0) {
+           currentMode = (DisplayMode)(currentMode - 1);
+       } else {
+           currentMode = MODE_POWER;
+       }
+       buttonPressed = true;
+   }
+   
+   if (wasButtonPressed(1)) { // DOWN  
+       Serial.println(F("DOWN pressed"));
+       powerManager.handleUserActivity();
+       
+       if (currentMode < MODE_POWER) {
+           currentMode = (DisplayMode)(currentMode + 1);
+       } else {
+           currentMode = MODE_DASHBOARD;
+       }
+       buttonPressed = true;
+   }
+   
+   if (wasButtonPressed(2)) { // SELECT
+       Serial.println(F("SELECT pressed"));
+       powerManager.handleUserActivity();
+       
+       if (currentMode == MODE_DASHBOARD) {
+           Serial.println(F("Entering settings menu"));
+           menuState.settingsMenuActive = true;
+           menuState.menuLevel = 0;
+           menuState.selectedItem = 0;
+           resetButtonStates();
+           return;
+       }
+       buttonPressed = true;
+   }
+   
+   if (wasButtonPressed(3)) { // BACK
+       Serial.println(F("BACK pressed"));
+       powerManager.handleUserActivity();
+       currentMode = MODE_DASHBOARD;
+       buttonPressed = true;
+   }
 
-    // Force display update on button press
-    if (buttonPressed) {
-        Serial.print(F("Mode changed to: "));
-        Serial.println(currentMode);
-        updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
-                      currentSpectralFeatures, currentActivityTrend);
-        lastDisplayUpdate = currentTime;
-    }
+   // Force display update on button press
+   if (buttonPressed) {
+       Serial.print(F("Mode changed to: "));
+       Serial.println(currentMode);
+       updateDisplay(display, currentMode, currentData, settings, systemStatus, rtc,
+                     currentSpectralFeatures, currentActivityTrend);
+       lastDisplayUpdate = currentTime;
+   }
 
-    // Run normal testing mode operation
-    handleTestingModeOperation(currentTime);
-    
-    // Check if we should enter sleep (only in field mode)
-    if (powerManager.isFieldModeActive()) {
-        powerManager.update(); // This checks for timeout and triggers sleep
-        
-        // If display is now off, we're going to sleep
-        if (!powerManager.isDisplayOn()) {
-            Serial.println(F("STATE: AWAKE → SLEEPING"));
-            currentSystemState = STATE_SLEEPING;
-            stateChangeTime = currentTime;
-        }
-    }
+   // Run normal testing mode operation
+   handleTestingModeOperation(currentTime);
+   
+   // Check if we should enter sleep (only in field mode)
+   if (powerManager.isFieldModeActive()) {
+       powerManager.update(); // This checks for timeout and triggers sleep
+       
+       // If display is now off, we're going to sleep
+       if (!powerManager.isDisplayOn()) {
+           Serial.println(F("STATE: AWAKE → SLEEPING"));
+           
+           // IMPORTANT: Recalculate next wake time based on current settings
+           // This accounts for any changes made in the settings menu
+           powerManager.updateNextWakeTime(settings.logInterval);
+           
+           currentSystemState = STATE_SLEEPING;
+           stateChangeTime = currentTime;
+           
+           // Start new sleep cycle with updated settings
+           powerManager.enterFieldSleep();
+       }
+   }
 }
 
+
 void handleSleepingState(unsigned long currentTime) {
+    // Add debug output to see what's happening
+    static unsigned long lastDebug = 0;
+    if (currentTime - lastDebug > 2000) {  // Every 2 seconds
+        Serial.print(powerManager.isWakeupFromScheduledTimer());        
+        Serial.print(F(", lastWakeSource="));
+        Serial.println(powerManager.getWakeSourceString());
+        lastDebug = currentTime;
+    }
+    
     // Update power manager to handle wake-up events
     powerManager.update();
     
     // Check wake-up sources
-    if (powerManager.isWakeupFromRTC()) {
+    if (powerManager.isWakeupFromScheduledTimer()) {
         Serial.println(F("STATE: SLEEPING → SCHEDULED_WAKE (RTC alarm)"));
         currentSystemState = STATE_SCHEDULED_WAKE;
         stateChangeTime = currentTime;
@@ -487,16 +597,28 @@ void handleScheduledWakeState(unsigned long currentTime) {
     }
     
     // Add to buffer instead of logging directly
+    // In handleScheduledWakeState(), replace the buffer addition with:
     if (systemStatus.rtcWorking) {
         uint32_t timestamp = rtc.now().unixtime();
-        if (fieldBuffer.addReading(currentData, timestamp)) {
-            Serial.print(F("Added to buffer ("));
+        
+        // Get the full audio analysis result if available
+        AudioAnalysisResult* audioResult = nullptr;
+        if (systemStatus.pdmWorking) {
+            static AudioAnalysisResult fullResult;
+            fullResult = audioProcessor.performFullAnalysis();
+            if (fullResult.analysisValid) {
+                audioResult = &fullResult;
+            }
+        }
+        
+        if (fieldBuffer.addReading(currentData, timestamp, audioResult)) {
+            Serial.print(F("Added FULL ML reading to buffer ("));
             Serial.print(fieldBuffer.getBufferCount());
             Serial.println(F(" readings)"));
         } else {
-            Serial.println(F("Buffer full - flushing to SD"));
+            Serial.println(F("Buffer full - flushing ML data to SD"));
             fieldBuffer.flushToSD(rtc, systemStatus);
-            fieldBuffer.addReading(currentData, timestamp);
+            fieldBuffer.addReading(currentData, timestamp, audioResult);
         }
     }
     
@@ -511,10 +633,20 @@ void handleScheduledWakeState(unsigned long currentTime) {
     powerManager.powerDownAudio();
     
     Serial.println(F("=== SCHEDULED WAKE COMPLETE ==="));
+    
+    // Clear wake source BEFORE transitioning to sleeping
+    powerManager.clearWakeSource();
+    
+    // Configure next wake time using CURRENT settings (accounts for any changes)
+    powerManager.updateNextWakeTime(settings.logInterval);
+    
     Serial.println(F("STATE: SCHEDULED_WAKE → SLEEPING"));
     currentSystemState = STATE_SLEEPING;
     stateChangeTime = currentTime;
     readingInProgress = false;
+    
+    // Start new sleep cycle with updated settings
+    powerManager.enterFieldSleep();
 }
 
 void handleUserWakeState(unsigned long currentTime) {

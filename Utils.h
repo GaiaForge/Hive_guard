@@ -106,6 +106,14 @@ bool isValidTemperature(float temp);
 bool isValidHumidity(float humidity);
 bool isValidPressure(float pressure);
 
+// Environmental ML calculations
+float calculateDewPoint(float temperature, float humidity);
+float calculateVPD(float temperature, float humidity);
+float calculateHeatIndex(float temperature, float humidity);
+float calculateForagingComfortIndex(float temp, float humidity, float pressure);
+float calculateEnvironmentalStress(float temp, float humidity, float pressure, 
+                                 float tempMin, float tempMax, float humMin, float humMax);
+
 // =============================================================================
 // SYSTEM UTILITIES
 // =============================================================================

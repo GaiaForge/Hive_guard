@@ -406,14 +406,7 @@ String formatTimestamp(DateTime dt) {
 // MATHEMATICAL FUNCTIONS
 // =============================================================================
 
-float calculateDewPoint(float temperature, float humidity) {
-    // Magnus formula approximation
-    float a = 17.27;
-    float b = 237.7;
-    float alpha = ((a * temperature) / (b + temperature)) + log(humidity / 100.0);
-    float dewPoint = (b * alpha) / (a - alpha);
-    return dewPoint;
-}
+
 
 float celsiusToFahrenheit(float celsius) {
     return (celsius * 9.0 / 5.0) + 32.0;
@@ -466,6 +459,127 @@ bool isValidHumidity(float humidity) {
 bool isValidPressure(float pressure) {
     return (pressure >= 300.0 && pressure <= 1100.0);
 }
+
+// =============================================================================
+// ENVIRONMENTAL ML CALCULATIONS - BEE SCIENCE GOLD!
+// =============================================================================
+
+float calculateDewPoint(float temperature, float humidity) {
+    // Magnus formula - used by meteorologists worldwide
+    float a = 17.27;
+    float b = 237.7;
+    float alpha = ((a * temperature) / (b + temperature)) + log(humidity / 100.0);
+    return (b * alpha) / (a - alpha);
+}
+
+float calculateVPD(float temperature, float humidity) {
+    // Vapour Pressure Deficit - CRITICAL for bee foraging behavior
+    // Bees are most active when VPD is 0.8-1.5 kPa
+    float saturationVP = 0.6108 * exp((17.27 * temperature) / (temperature + 237.3));
+    float actualVP = saturationVP * (humidity / 100.0);
+    float vpd = saturationVP - actualVP;
+    return max(0.0f, vpd); // VPD can't be negative
+}
+
+float calculateHeatIndex(float temperature, float humidity) {
+    // "Feels like" temperature for bees - accounts for humidity stress
+    if (temperature < 27.0) {
+        return temperature; // Heat index not relevant below 27°C
+    }
+    
+    float T = temperature;
+    float H = humidity;
+    
+    // Simplified heat index formula
+    float HI = -42.379 + 2.04901523 * T + 10.14333127 * H 
+               - 0.22475541 * T * H - 6.83783e-3 * T * T
+               - 5.481717e-2 * H * H + 1.22874e-3 * T * T * H
+               + 8.5282e-4 * T * H * H - 1.99e-6 * T * T * H * H;
+    
+    return HI;
+}
+
+float calculateForagingComfortIndex(float temp, float humidity, float pressure) {
+    // Combined index for optimal bee foraging conditions (0-100)
+    float score = 0;
+    
+    // Temperature component (40 points max)
+    if (temp >= 18 && temp <= 32) {
+        score += 40; // Optimal foraging temperature
+    } else if (temp >= 15 && temp <= 35) {
+        score += 20; // Acceptable temperature
+    } else if (temp >= 10 && temp <= 40) {
+        score += 10; // Marginal temperature
+    }
+    
+    // Humidity component (30 points max)
+    if (humidity >= 40 && humidity <= 70) {
+        score += 30; // Optimal humidity
+    } else if (humidity >= 30 && humidity <= 80) {
+        score += 15; // Acceptable humidity
+    }
+    
+    // Pressure component (20 points max) - stable weather
+    if (pressure >= 1010 && pressure <= 1025) {
+        score += 20; // High pressure = stable conditions
+    } else if (pressure >= 1000 && pressure <= 1030) {
+        score += 10; // Acceptable pressure
+    }
+    
+    // VPD bonus (10 points max) - the bee activity sweet spot!
+    float vpd = calculateVPD(temp, humidity);
+    if (vpd >= 0.8 && vpd <= 1.5) {
+        score += 10; // Optimal VPD for bee activity
+    } else if (vpd >= 0.5 && vpd <= 2.0) {
+        score += 5; // Acceptable VPD
+    }
+    
+    return constrain(score, 0, 100);
+}
+
+float calculateEnvironmentalStress(float temp, float humidity, float pressure,
+                                 float tempMin, float tempMax, float humMin, float humMax) {
+    // Calculate environmental stress level (0-100, where 100 = maximum stress)
+    float stress = 0;
+    
+    // Temperature stress (0-40 points)
+    if (temp < tempMin) {
+        float coldStress = (tempMin - temp) * 4; // 4 points per degree below min
+        stress += min(40.0f, coldStress);
+    } else if (temp > tempMax) {
+        float heatStress = (temp - tempMax) * 4; // 4 points per degree above max
+        stress += min(40.0f, heatStress);
+    }
+    
+    // Humidity stress (0-30 points)
+    if (humidity < humMin) {
+        float dryStress = (humMin - humidity) * 1.5; // 1.5 points per % below min
+        stress += min(30.0f, dryStress);
+    } else if (humidity > humMax) {
+        float wetStress = (humidity - humMax) * 1.5; // 1.5 points per % above max
+        stress += min(30.0f, wetStress);
+    }
+    
+    // Pressure stress (0-20 points) - extreme weather
+    if (pressure < 990) {
+        stress += 20; // Very low pressure = storm coming
+    } else if (pressure < 1000) {
+        stress += 10; // Low pressure = unsettled weather
+    } else if (pressure > 1030) {
+        stress += 5; // Very high pressure can be stressful too
+    }
+    
+    // VPD stress (0-10 points) - poor foraging conditions
+    float vpd = calculateVPD(temp, humidity);
+    if (vpd > 3.0) {
+        stress += 10; // Very dry air
+    } else if (vpd < 0.3) {
+        stress += 5; // Very humid air
+    }
+    
+    return constrain(stress, 0, 100);
+}
+
 
 // =============================================================================
 // SYSTEM UTILITIES

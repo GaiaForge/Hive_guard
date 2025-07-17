@@ -11,12 +11,18 @@
 #include <nrf.h>
 #include <nrf_power.h>
 #include <nrf_rtc.h>
+#include <nrf_soc.h>
+#include <nrf_nvic.h>
+#include <nrf_gpio.h>
 #endif
 
 extern RTC_PCF8523 rtc;  // Reference to global RTC object
 
 // Global pointer for interrupt handler access
 static PowerManager* powerManagerInstance = nullptr;
+
+// Retained state in special RAM section that survives System OFF
+__attribute__((section(".noinit"))) static RetainedState retainedState;
 
 // =============================================================================
 // POWER CONSUMPTION CONSTANTS (mA)
@@ -27,7 +33,8 @@ const float PowerManager::POWER_DISPLAY_MA = 8.0f;
 const float PowerManager::POWER_SENSORS_MA = 2.0f;
 const float PowerManager::POWER_AUDIO_MA = 5.0f;
 const float PowerManager::POWER_BLUETOOTH_MA = 12.0f;
-const float PowerManager::POWER_SLEEP_MA = 0.05f;
+const float PowerManager::POWER_SLEEP_MA = 1.0f;      // Polling sleep
+const float PowerManager::POWER_DEEP_SLEEP_MA = 0.001f; // True deep sleep
 
 // =============================================================================
 // CONSTRUCTOR AND INITIALIZATION
@@ -37,8 +44,8 @@ PowerManager::PowerManager() {
     // Initialize status
     status.currentMode = POWER_TESTING;
     status.fieldModeActive = false;
-    status.displayOn = true;  // Starts on
-    status.displayTimeoutMs = 0;  // Will be set from settings
+    status.displayOn = true;
+    status.displayTimeoutMs = 0;
     status.lastUserActivity = 0;
     status.nextSleepTime = 0;
     status.totalUptime = 0;
@@ -64,17 +71,24 @@ PowerManager::PowerManager() {
     status.lastBluetoothActivity = 0;
     status.bluetoothManuallyActivated = false;
     
+    // NEW: Deep sleep variables
+    status.deepSleepCapable = false;
+    status.deepSleepCycles = 0;
+    status.wakeFromDeepSleep = false;
+    
     // Initialize settings
     settings.fieldModeEnabled = false;
-    settings.displayTimeoutMin = 2;     // Default 2 minutes
+    settings.displayTimeoutMin = 2;
     settings.sleepIntervalMin = 10;
     settings.autoFieldMode = false;
     settings.criticalBatteryLevel = 15;
+    settings.useDeepSleep = true;  // Enable by default
     
     // Initialize timing
     lastPowerCheck = 0;
     displayOffTime = 0;
     lastSleepTime = 0;
+    rtcInterruptWorking = false;
        
     systemStatus = nullptr;
     systemSettings = nullptr;
@@ -83,13 +97,11 @@ PowerManager::PowerManager() {
     longPressStartTime = 0;
     longPressDetected = false;
     
-    // Initialize deep sleep variables
+    // Initialize wake-up variables
     wakeupFromRTC = false;
     wakeupFromButton = false;
     scheduledWakeTime = 0;
-    rtcInterruptWorking = false;  // Add this line
     
-    // Set global instance pointer for interrupt handler
     powerManagerInstance = this;
 }
 
@@ -100,6 +112,10 @@ void PowerManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSettin
     // Initialize display power control hardware
     initializeDisplayPower();
 
+    // Initialize retained state (clear on normal boots)
+    // Note: This will be overridden by restoreRetainedState() if called later
+    memset(&retainedState, 0, sizeof(retainedState));
+
     // Initialize Bluetooth button
     pinMode(BTN_BLUETOOTH, INPUT_PULLUP);
     Serial.println(F("Bluetooth button initialized on pin 13"));
@@ -107,11 +123,10 @@ void PowerManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSettin
     // Load display timeout settings from system settings
     if (sysSettings) {
         settings.fieldModeEnabled = sysSettings->fieldModeEnabled;
-        settings.displayTimeoutMin = constrain(sysSettings->displayTimeoutMin, 1, 5); // 1-5 minutes only
+        settings.displayTimeoutMin = constrain(sysSettings->displayTimeoutMin, 1, 5);
         status.displayTimeoutMs = settings.displayTimeoutMin * 60000UL;
-        status.bluetoothTimeoutMs = status.displayTimeoutMs; // Same timeout for Bluetooth
+        status.bluetoothTimeoutMs = status.displayTimeoutMs;
         
-        // If field mode is enabled in settings, activate it
         if (settings.fieldModeEnabled) {
             enableFieldMode();
         }
@@ -119,20 +134,17 @@ void PowerManager::initialize(SystemStatus* sysStatus, SystemSettings* sysSettin
     
     status.lastUserActivity = millis();
     status.lastBluetoothActivity = millis();
-    status.totalUptime = millis();  // Set uptime reference
+    status.totalUptime = millis();
     status.lastFlushTime = millis();
     
-    // Setup RTC interrupt for deep sleep wake-up
-    setupRTCInterrupt();
-    
-    Serial.println(F("PowerManager initialized with deep sleep capability"));
-    Serial.println(F("  - Power monitoring: ENABLED"));
-    Serial.println(F("  - Field mode: ENABLED"));
-    Serial.println(F("  - Display control: ENABLED (Pin 12)"));
-    Serial.println(F("  - RTC wake-up: ENABLED (Pin A1)"));
+    // Initialize deep sleep capability
+        
+    Serial.println(F("PowerManager initialized"));
+    Serial.print(F("  - Deep sleep capable: "));
+    Serial.println(status.deepSleepCapable ? "YES" : "NO");
     Serial.print(F("  - Display timeout: "));
     Serial.print(settings.displayTimeoutMin);
-    Serial.println(F(" minutes (1-5 range)"));
+    Serial.println(F(" minutes"));
 }
 
 // Set Bluetooth manager reference
@@ -142,100 +154,181 @@ void PowerManager::setBluetoothManager(BluetoothManager* btManager) {
 }
 
 // =============================================================================
+// RETAINED STATE MANAGEMENT
+// =============================================================================
+
+void PowerManager::saveRetainedState() {
+    Serial.println(F("Saving state to retained memory..."));
+    
+    retainedState.magic = RETAINED_MAGIC;
+    retainedState.fieldModeActive = status.fieldModeActive;
+    retainedState.deepSleepWake = true;
+    retainedState.wakeReason = WAKE_RTC;
+    retainedState.logInterval = systemSettings ? systemSettings->logInterval : 10;
+    retainedState.nextWakeTime = status.nextWakeTime;
+    
+    // Calculate checksum
+    retainedState.checksum = calculateRetainedChecksum(retainedState);
+    
+    Serial.print(F("Retained state: fieldMode="));
+    Serial.print(retainedState.fieldModeActive);
+    Serial.print(F(", logInterval="));
+    Serial.println(retainedState.logInterval);
+}
+
+bool PowerManager::restoreRetainedState() {
+    Serial.println(F("Checking retained memory..."));
+    
+    // Validate magic number
+    if (retainedState.magic != RETAINED_MAGIC) {
+        Serial.println(F("No valid retained state found (magic mismatch)"));
+        return false;
+    }
+    
+    // Validate checksum
+    uint16_t expectedChecksum = calculateRetainedChecksum(retainedState);
+    if (retainedState.checksum != expectedChecksum) {
+        Serial.println(F("Retained state corrupted (checksum mismatch)"));
+        clearRetainedState();
+        return false;
+    }
+    
+    // Validate that this was actually a deep sleep wake
+    if (!retainedState.deepSleepWake) {
+        Serial.println(F("Not a deep sleep wake"));
+        return false;
+    }
+    
+    Serial.println(F("✓ Valid retained state found"));
+    Serial.print(F("Restoring field mode: "));
+    Serial.println(retainedState.fieldModeActive ? "ACTIVE" : "INACTIVE");
+    
+    // Restore field mode state
+    if (retainedState.fieldModeActive) {
+        // Restore field mode without going through full initialization
+        status.fieldModeActive = true;
+        status.currentMode = POWER_FIELD;
+        settings.fieldModeEnabled = true;
+        
+        // Update system settings
+        if (systemSettings) {
+            systemSettings->fieldModeEnabled = true;
+            systemSettings->logInterval = retainedState.logInterval;
+        }
+        
+        // Keep display OFF since this is a scheduled wake
+        turnOffDisplay();
+        
+        // Power down non-essential components
+        powerDownNonEssential();
+        
+        Serial.println(F("Field mode restored from retained state"));
+        return true;
+    }
+    
+    return false;
+}
+
+void PowerManager::clearRetainedState() {
+    Serial.println(F("Clearing retained state"));
+    memset(&retainedState, 0, sizeof(retainedState));
+}
+
+uint16_t PowerManager::calculateRetainedChecksum(const RetainedState& state) {
+    uint16_t checksum = 0;
+    const uint8_t* data = (const uint8_t*)&state;
+    
+    // Calculate checksum for all fields except the checksum field itself
+    for (size_t i = 0; i < sizeof(RetainedState) - sizeof(uint16_t); i++) {
+        checksum += data[i];
+    }
+    
+    return checksum;
+}
+
+// =============================================================================
+// DEEP SLEEP INITIALIZATION
+// =============================================================================
+
+bool PowerManager::initializeDeepSleep() {
+#ifdef NRF52_SERIES
+    if (!systemStatus || !systemStatus->rtcWorking) {
+        Serial.println(F("Deep sleep disabled: RTC not working"));
+        return false;
+    }
+    
+    // Setup wake-up pin for deep sleep
+    setupWakeupPin();
+    
+    // IMPORTANT: Ensure PCF8523 is properly started
+    extern RTC_PCF8523 rtc;
+    if (!rtc.isrunning()) {
+        Serial.println(F("Starting PCF8523 oscillator"));
+        rtc.start();
+        delay(100); // Let oscillator stabilize
+    }
+    
+    Serial.println(F("Deep sleep initialization complete"));
+    return true;
+#else
+    Serial.println(F("Deep sleep not supported on this platform"));
+    return false;
+#endif
+}
+
+void PowerManager::initializeWakeDetection(WakeUpSource bootReason) {
+    status.lastWakeSource = bootReason;
+    
+    if (bootReason == WAKE_RTC) {
+        status.wakeFromDeepSleep = true;
+        status.deepSleepCycles++;
+        Serial.println(F("PowerManager: Detected wake from deep sleep"));
+    } else {
+        status.wakeFromDeepSleep = false;
+        Serial.println(F("PowerManager: Normal boot sequence"));
+    }
+}
+
+// =============================================================================
 // DEEP SLEEP MANAGEMENT
 // =============================================================================
 
 void PowerManager::setupRTCInterrupt() {
-    // Configure A1 as input with pullup for RTC interrupt
+    // This is now fallback only
     pinMode(RTC_INT_PIN, INPUT_PULLUP);
-    
-    // Clear wake-up flags
     wakeupFromRTC = false;
     wakeupFromButton = false;
-    rtcInterruptWorking = false;  // Start pessimistic
+    rtcInterruptWorking = false;
     
-    Serial.println(F("PowerManager: Setting up RTC interrupt system..."));
-    
-    // Step 1: Try to clear any pending RTC alarm flags
-    clearRTCAlarmFlags();
-    
-    // Step 2: Check pin state after clearing
-    delay(200);  // Give RTC time to release pin
-    int pinState = digitalRead(RTC_INT_PIN);
-    
-    Serial.print(F("RTC_INT_PIN (A1) state after clear: "));
-    Serial.println(pinState ? "HIGH (good)" : "LOW (stuck)");
-    
-    if (pinState == HIGH) {
-        // Pin is in proper idle state - try to attach interrupt
-        Serial.println(F("Attempting to attach RTC interrupt..."));
-        
-        attachInterrupt(digitalPinToInterrupt(RTC_INT_PIN), rtcInterruptHandler, FALLING);
-        
-        // Test the interrupt by monitoring pin for a few seconds
-        Serial.println(F("Testing interrupt stability..."));        
-        unsigned long testStart = millis();
-        int falseAlarms = 0;
-        
-        while (millis() - testStart < 2000) {  // Test for 2 seconds
-            if (wakeupFromRTC) {
-                falseAlarms++;
-                wakeupFromRTC = false;  // Clear for next test
-                Serial.print(F("False alarm #")); Serial.println(falseAlarms);
-            }
-            delay(50);
-        }
-        
-        if (falseAlarms == 0) {
-            rtcInterruptWorking = true;
-            Serial.println(F("✓ RTC interrupt is stable and working"));
-            Serial.println(F("✓ Will use hardware interrupt for wake-ups"));
-        } else {
-            detachInterrupt(digitalPinToInterrupt(RTC_INT_PIN));
-            Serial.print(F("✗ RTC interrupt unstable ("));
-            Serial.print(falseAlarms);
-            Serial.println(F(" false alarms)"));
-            Serial.println(F("✓ Will use polling backup method"));
-        }
-    } else {
-        Serial.println(F("✗ A1 pin stuck LOW - RTC alarm flag not clearable"));
-        Serial.println(F("✓ Will use polling backup method"));
-    }
-    
-    if (!rtcInterruptWorking) {
-        Serial.println(F("PowerManager: RTC interrupt disabled, using polling fallback"));
-    }
-    
-    Serial.println(F("PowerManager: Wake system initialized"));
+    Serial.println(F("RTC interrupt setup (polling fallback mode)"));
 }
 
-void PowerManager::clearRTCAlarmFlags() {
-    if (!systemStatus || !systemStatus->rtcWorking) {
-        Serial.println(F("Cannot clear RTC flags - RTC not working"));
-        return;
+void PowerManager::clearRTCAlarmFlag() {
+    Serial.println(F("Clearing PCF8523 alarm flag"));
+    
+    // Read Control_2 register
+    Wire.beginTransmission(0x68);
+    Wire.write(0x01);  // Control_2 register
+    Wire.endTransmission();
+    
+    Wire.requestFrom(0x68, 1);
+    if (Wire.available()) {
+        uint8_t control2 = Wire.read();
+        
+        Serial.print(F("Control_2 before clear: 0x"));
+        Serial.println(control2, HEX);
+        
+        // Clear the alarm flag (AF) bit (bit 3)
+        control2 &= ~0x08;
+        
+        Wire.beginTransmission(0x68);
+        Wire.write(0x01);
+        Wire.write(control2);
+        Wire.endTransmission();
+        
+        Serial.print(F("Control_2 after clear: 0x"));
+        Serial.println(control2, HEX);
     }
-    
-    extern RTC_PCF8523 rtc;
-    
-    Serial.println(F("Clearing RTC alarm flags..."));
-    
-    // Method 1: Read current time (sometimes clears flags)
-    DateTime now = rtc.now();
-    delay(50);
-    
-    // Method 2: Try to disable any existing alarms
-    // Note: PCF8523 library may not have these methods, but try:
-    // rtc.disableAlarm();  // If available
-    // rtc.clearAlarmFlag(); // If available
-    
-    // Method 3: Read time multiple times to clear any pending states
-    for (int i = 0; i < 5; i++) {
-        rtc.now();
-        delay(20);
-    }
-    
-    Serial.print(F("Current RTC time: "));
-    Serial.println(now.timestamp(DateTime::TIMESTAMP_FULL));
 }
 
 // Static interrupt handler - must be static and minimal
@@ -282,77 +375,67 @@ bool PowerManager::handleRTCWakeup() {
 
 
 void PowerManager::enterNRF52Sleep() {
-#ifdef NRF52_SERIES
-    Serial.print(F("PowerManager: Entering deep sleep ("));
-    Serial.print(rtcInterruptWorking ? "interrupt" : "polling");
-    Serial.println(F(" mode)"));
+    Serial.println(F("Entering polling-based sleep"));
     Serial.flush();
     
     prepareSleep();
-    configureWakeupSources();
     
-    if (rtcInterruptWorking) {
-        // Method 1: True deep sleep with hardware interrupt
-        Serial.println(F("Using hardware interrupt deep sleep"));
-        
-        // Configure for true deep sleep
-        // TODO: Implement actual nRF52 deep sleep with sd_power_system_off()
-        // For now, use the delay method but with longer delays for power savings
-        
-        unsigned long targetWakeTime = scheduledWakeTime * 1000UL;
-        
-        while (millis() < targetWakeTime && !wakeupFromRTC) {
-            // Check for button press wake-up (higher priority)
-            updateButtonStates();
-            if (wasButtonPressed(0) || wasButtonPressed(1) || wasButtonPressed(2) || 
-                wasButtonPressed(3) || wasBluetoothButtonPressed()) {
-                Serial.println(F("PowerManager: Woke from button press"));
-                status.lastWakeSource = WAKE_BUTTON;
-                wakeupFromButton = true;
-                return;
-            }
-            
-            // Longer delays since we have hardware interrupt for RTC
-            delay(500);  // 500ms delays save more power
-        }
-        
-        // Check wake source
-        if (wakeupFromRTC) {
-            Serial.println(F("PowerManager: Woke from RTC interrupt"));
-            status.lastWakeSource = WAKE_RTC;
-        } else {
-            Serial.println(F("PowerManager: Woke from timer (polling backup)"));
-            status.lastWakeSource = WAKE_TIMER;
-        }
-        
-    } else {
-        // Method 2: Polling fallback (your current working method)
-        Serial.println(F("Using polling fallback method"));
-        
-        unsigned long targetWakeTime = scheduledWakeTime * 1000UL;
-        
-        while (millis() < targetWakeTime) {
-            // Check for button press wake-up
-            updateButtonStates();
-            if (wasButtonPressed(0) || wasButtonPressed(1) || wasButtonPressed(2) || 
-                wasButtonPressed(3) || wasBluetoothButtonPressed()) {
-                Serial.println(F("PowerManager: Woke from button press"));
-                status.lastWakeSource = WAKE_BUTTON;
-                wakeupFromButton = true;
-                return;
-            }
-            delay(100);  // Faster polling since no hardware interrupt
-        }
-        
-        // Timer wake-up
-        Serial.println(F("PowerManager: Woke from timer"));
+    // Calculate how many milliseconds until the next wake time
+    DateTime now = rtc.now();
+    DateTime nextWake(scheduledWakeTime);
+    long secondsUntilWake = nextWake.unixtime() - now.unixtime();
+
+    // If negative or too far in future, wake in 5 minutes as fallback
+    if (secondsUntilWake <= 0 || secondsUntilWake > 3600) {
+        secondsUntilWake = 300;  // 5 minutes fallback
+    }
+
+    unsigned long targetWakeTime = millis() + (secondsUntilWake * 1000UL);
+    
+    // DEBUG: Show timing info
+    Serial.print(F("scheduledWakeTime (unix): "));
+    Serial.println(scheduledWakeTime);
+    Serial.print(F("Current millis(): "));
+    Serial.println(millis());
+    Serial.print(F("Target wake millis: "));
+    Serial.println(targetWakeTime);
+    
+    // Check if target time is in the past
+    if (targetWakeTime <= millis()) {
+        Serial.println(F("ERROR: Target wake time is in the past!"));
+        Serial.println(F("Waking immediately"));
         status.lastWakeSource = WAKE_TIMER;
+        return;
     }
     
-#else
-    Serial.println(F("PowerManager: Deep sleep not supported on this platform"));
-    delay(1000);
-#endif
+    Serial.print(F("Will wake in: "));
+    Serial.print((targetWakeTime - millis()) / 1000);
+    Serial.println(F(" seconds"));
+    
+    while (millis() < targetWakeTime) {
+        // Show countdown every 30 seconds
+        static unsigned long lastDebug = 0;
+        if (millis() - lastDebug > 30000) {
+            unsigned long remaining = (targetWakeTime - millis()) / 1000;
+            Serial.print(F("Sleeping... wake in "));
+            Serial.print(remaining);
+            Serial.println(F(" seconds"));
+            lastDebug = millis();
+        }
+        
+        updateButtonStates();
+        if (wasButtonPressed(0) || wasButtonPressed(1) || wasButtonPressed(2) || 
+            wasButtonPressed(3) || wasBluetoothButtonPressed()) {
+            Serial.println(F("Woke from button press"));
+            status.lastWakeSource = WAKE_BUTTON;
+            wakeupFromButton = true;
+            return;
+        }
+        delay(100);
+    }
+    
+    Serial.println(F("Woke from timer"));
+    status.lastWakeSource = WAKE_TIMER;
 }
 
 
@@ -360,13 +443,18 @@ void PowerManager::enterNRF52Sleep() {
 // WAKE-UP STATUS FUNCTIONS
 // =============================================================================
 
-bool PowerManager::isWakeupFromRTC() const {
-    return status.lastWakeSource == WAKE_RTC;
+bool PowerManager::isWakeupFromScheduledTimer() const {
+    return status.lastWakeSource == WAKE_RTC || status.lastWakeSource == WAKE_TIMER;
 }
 
 bool PowerManager::isWakeupFromButton() const {
     return status.lastWakeSource == WAKE_BUTTON || 
            status.lastWakeSource == WAKE_BLUETOOTH_BUTTON;
+}
+
+void PowerManager::clearWakeSource() {
+    status.lastWakeSource = WAKE_UNKNOWN;
+    status.wokenByTimer = false;
 }
 
 // =============================================================================
@@ -630,48 +718,42 @@ void PowerManager::checkFieldModeTimeout(unsigned long currentTime) {
 // =============================================================================
 
 void PowerManager::enterFieldSleep() {
-    Serial.println(F("Field Mode: Display timeout reached - entering deep sleep"));
+    Serial.println(F("Field Mode: Display timeout reached"));
     
     // Turn off display first
     turnOffDisplay();
-    
-    // Wait 500ms as specified
     delay(500);
     
     // Power down non-essential components
     powerDownNonEssential();
     
-    // Configure next wake time
-    if (systemSettings && systemStatus && systemStatus->rtcWorking) {
-        DateTime now = rtc.now();
-        uint8_t logInterval = systemSettings->logInterval;
+    if (canUseDeepSleep()) {
+        Serial.println(F("Using true deep sleep"));
+        enterDeepSleepMode();  // This never returns
+    } else {
+        Serial.println(F("Using polling sleep fallback"));
         
-        // Calculate next interval boundary (round up to next interval minute)
-        int nextMinute = ((now.minute() / logInterval) + 1) * logInterval;
-        int nextHour = now.hour();
-        
-        // Handle minute overflow
-        if (nextMinute >= 60) {
-            nextMinute = 0;
-            nextHour++;
-            if (nextHour >= 24) nextHour = 0;
+        // Configure next wake time for polling
+        if (systemSettings && systemStatus && systemStatus->rtcWorking) {
+            DateTime now = rtc.now();
+            uint8_t logInterval = systemSettings->logInterval;
+            
+            int nextMinute = ((now.minute() / logInterval) + 1) * logInterval;
+            int nextHour = now.hour();
+            
+            if (nextMinute >= 60) {
+                nextMinute = 0;
+                nextHour++;
+                if (nextHour >= 24) nextHour = 0;
+            }
+            
+            DateTime nextWake(now.year(), now.month(), now.day(), nextHour, nextMinute, 0);
+            configureRTCWakeup(nextWake.unixtime());
         }
         
-        DateTime nextWake(now.year(), now.month(), now.day(), nextHour, nextMinute, 0);
-        configureRTCWakeup(nextWake.unixtime());
-        
-        Serial.print(F("PowerManager: Next wake at "));
-        Serial.print(nextHour);
-        Serial.print(F(":"));
-        if (nextMinute < 10) Serial.print(F("0"));
-        Serial.println(nextMinute);
+        // Enter polling-based sleep
+        enterNRF52Sleep();
     }
-    
-    Serial.println(F("=== ENTERING DEEP SLEEP ==="));
-    Serial.println(F("Wake sources: RTC alarm OR button press"));
-    
-    // Enter actual deep sleep
-    enterNRF52Sleep();
 }
 
 void PowerManager::wakeFromFieldSleep() {
@@ -873,6 +955,21 @@ bool PowerManager::wasWokenByTimer() const {
     return status.wokenByTimer;
 }
 
+void PowerManager::setupWakeupPin() {
+#ifdef NRF52_SERIES
+    pinMode(RTC_INT_PIN, INPUT_PULLUP);
+    
+    // Configure A1 to generate DETECT signal on LOW level for System OFF wake
+    nrf_gpio_cfg_sense_input(digitalPinToPinName(RTC_INT_PIN), 
+                             NRF_GPIO_PIN_PULLUP, 
+                             NRF_GPIO_PIN_SENSE_LOW);
+    
+    Serial.println(F("Wake-up pin A1 configured for deep sleep"));
+    Serial.print(F("Pin state: "));
+    Serial.println(digitalRead(RTC_INT_PIN) ? "HIGH" : "LOW");
+#endif
+}
+
 // =============================================================================
 // POWER MODE MANAGEMENT
 // =============================================================================
@@ -927,60 +1024,39 @@ void PowerManager::updatePowerMode(float batteryVoltage) {
 void PowerManager::calculateRuntimeEstimate(float batteryVoltage) {
     const float BATTERY_CAPACITY_MAH = 1200.0f;
     
-    // Calculate current consumption based on active components
     float currentConsumption = POWER_TESTING_MA;
     
-    // Factor in field mode with display timeout power savings
     if (status.fieldModeActive) {
-        // In field mode, we're awake for ~2 minutes every log interval
         float awakeTimeRatio = 2.0f / (systemSettings ? systemSettings->logInterval : 10.0f);
-        
-        // Active power when awake
         float activePower = POWER_TESTING_MA + POWER_SENSORS_MA;
+        
         if (systemStatus && systemStatus->pdmWorking) {
             activePower += POWER_AUDIO_MA;
         }
-        
-        // Add display power only when display is on
         if (status.displayOn) {
             activePower += POWER_DISPLAY_MA;
         }
         
-        // Sleep power when asleep
-        float sleepPower = POWER_SLEEP_MA;
-        
-        // Calculate display on/off ratio
-        float displayOnRatio = 1.0f; // Default: always on
-        if (status.fieldModeActive && status.displayTimeoutMs > 0) {
-            // Estimate display is on 10% of the time in field mode with timeout
-            displayOnRatio = 0.1f;
-            activePower = POWER_TESTING_MA + POWER_SENSORS_MA + (POWER_DISPLAY_MA * displayOnRatio);
-            if (systemStatus && systemStatus->pdmWorking) {
-                activePower += POWER_AUDIO_MA;
-            }
-        }
+        // Use appropriate sleep power based on deep sleep capability
+        float sleepPower = canUseDeepSleep() ? POWER_DEEP_SLEEP_MA : POWER_SLEEP_MA;
         
         currentConsumption = (activePower * awakeTimeRatio) + (sleepPower * (1.0f - awakeTimeRatio));
     } else {
-        // Testing mode - all components on including display
         currentConsumption += POWER_DISPLAY_MA + POWER_SENSORS_MA;
         if (systemStatus && systemStatus->pdmWorking) {
             currentConsumption += POWER_AUDIO_MA;
         }
     }
     
-    // Calculate remaining capacity based on voltage
     float batteryLevel = getBatteryLevel(batteryVoltage);
     float remainingCapacity = BATTERY_CAPACITY_MAH * (batteryLevel / 100.0f);
     
-    // Estimate runtime
     if (currentConsumption > 0) {
         status.estimatedRuntimeHours = remainingCapacity / currentConsumption;
     } else {
         status.estimatedRuntimeHours = 999.0f;
     }
     
-    // Calculate daily usage estimate
     status.dailyUsageEstimateMah = currentConsumption * 24.0f;
 }
 
@@ -1034,6 +1110,168 @@ void PowerManager::powerUpBluetooth() {
     }
     status.bluetoothState = COMP_POWER_ON;
     Serial.println(F("PowerManager: Bluetooth powered up"));
+}
+
+// =============================================================================
+// DEEP SLEEP IMPLEMENTATION
+// =============================================================================
+
+void PowerManager::enterDeepSleepMode() {
+#ifdef NRF52_SERIES
+    if (!canUseDeepSleep()) {
+        Serial.println(F("Deep sleep not available - using polling fallback"));
+        enterNRF52Sleep();
+        return;
+    }
+    
+    Serial.println(F("PowerManager: Preparing for System OFF deep sleep"));
+
+    saveRetainedState();
+    
+    // Power down all peripherals
+    prepareSleep();
+    
+    // Calculate next wake time
+    extern RTC_PCF8523 rtc;
+    DateTime now = rtc.now();
+    uint8_t logInterval = systemSettings ? systemSettings->logInterval : 10;
+    
+    Serial.print(F("Current time: "));
+    Serial.print(now.hour());
+    Serial.print(F(":"));
+    if (now.minute() < 10) Serial.print(F("0"));
+    Serial.println(now.minute());
+    
+    // Calculate next interval boundary
+    int nextMinute = ((now.minute() / logInterval) + 1) * logInterval;
+    if (nextMinute >= 60) {
+        nextMinute %= 60;
+    }
+    
+    Serial.print(F("Next wake minute: "));
+    Serial.println(nextMinute);
+    
+    // Program the PCF8523 hardware alarm
+    programRTCAlarm(nextMinute);
+    
+    // Small delay to ensure alarm is set
+    delay(100);
+    
+    Serial.println(F("=== ENTERING SYSTEM OFF DEEP SLEEP ==="));
+    Serial.println(F("Device will reset on RTC alarm"));
+    Serial.println(F("Next message will be from setup() after wake"));
+    Serial.flush(); // Ensure all output is sent
+    
+    // Configure wake-up pin one more time
+    nrf_gpio_cfg_sense_input(digitalPinToPinName(RTC_INT_PIN), 
+                             NRF_GPIO_PIN_PULLUP, 
+                             NRF_GPIO_PIN_SENSE_LOW);
+    
+    // Enter System OFF - this does not return
+    // System will reset when RTC alarm pulls A1 low
+    sd_power_system_off();
+    
+    // This line should never be reached
+    Serial.println(F("ERROR: System OFF failed!"));
+#else
+    Serial.println(F("Deep sleep not supported - using polling"));
+    enterNRF52Sleep();
+#endif
+}
+
+void PowerManager::programRTCAlarm(uint8_t targetMinute) {
+    extern RTC_PCF8523 rtc;
+    (void)rtc; // Suppress unused variable warning
+    
+    Serial.print(F("Programming RTC alarm for minute: "));
+    Serial.println(targetMinute);
+    
+    // Clear any existing alarm flag first
+    clearRTCAlarmFlag();
+    
+    // PCF8523 Register Map (from datasheet):
+    // 0x0A = Minute_alarm
+    // 0x0B = Hour_alarm  
+    // 0x0C = Day_alarm
+    // 0x0D = Weekday_alarm
+    // 0x01 = Control_2 (contains AIE bit)
+    
+    // Program alarm registers directly via I2C
+    Wire.beginTransmission(0x68);  // PCF8523 I2C address
+    Wire.write(0x0A);              // Start at Minute_alarm register
+    Wire.write(decToBcd(targetMinute)); // Set target minute in BCD
+    Wire.write(0x80);              // Hour_alarm disabled (bit 7 = 1)
+    Wire.write(0x80);              // Day_alarm disabled (bit 7 = 1)
+    Wire.write(0x80);              // Weekday_alarm disabled (bit 7 = 1)
+    Wire.endTransmission();
+    
+    // Enable alarm interrupt in Control_2 register
+    Wire.beginTransmission(0x68);
+    Wire.write(0x01);              // Control_2 register address
+    Wire.endTransmission();
+    
+    Wire.requestFrom(0x68, 1);
+    uint8_t control2 = Wire.read();
+    
+    control2 |= 0x02;              // Set AIE bit (bit 1) to enable alarm interrupt
+    control2 &= ~0x08;             // Clear AF bit (bit 3) - alarm flag
+    
+    Wire.beginTransmission(0x68);
+    Wire.write(0x01);              // Control_2 register
+    Wire.write(control2);
+    Wire.endTransmission();
+    
+    Serial.println(F("RTC hardware alarm programmed"));
+    
+    // Verify the alarm was set correctly
+    Wire.beginTransmission(0x68);
+    Wire.write(0x0A);
+    Wire.endTransmission();
+    Wire.requestFrom(0x68, 1);
+    uint8_t readBack = Wire.read();
+    Serial.print(F("Alarm minute register: 0x"));
+    Serial.print(readBack, HEX);
+    Serial.print(F(" ("));
+    Serial.print(bcdToDec(readBack));
+    Serial.println(F(")"));
+}
+
+
+
+uint8_t PowerManager::decToBcd(uint8_t val) {
+    return ((val / 10) << 4) + (val % 10);
+}
+
+uint8_t PowerManager::bcdToDec(uint8_t val) {
+    return ((val >> 4) * 10) + (val & 0x0F);
+}
+
+bool PowerManager::canUseDeepSleep() const {
+    Serial.println("=== Deep Sleep Capability Check ===");
+    
+    if (!status.deepSleepCapable) {
+        Serial.println("Deep sleep: Not capable - initializeDeepSleep failed");
+        return false;
+    }
+    
+    if (!settings.useDeepSleep) {
+        Serial.println("Deep sleep: Disabled in settings");
+        return false;
+    }
+    
+    if (!systemStatus || !systemStatus->rtcWorking) {
+        Serial.println("Deep sleep: RTC not working");
+        return false;
+    }
+    
+    extern RTC_PCF8523 rtc;
+    if (!rtc.isrunning()) {
+        Serial.println("Deep sleep: RTC oscillator not running");
+        return false;
+    }
+    
+    Serial.println("Deep sleep: All checks passed - CAPABLE");
+    return true;
 }
 
 // =============================================================================
@@ -1129,35 +1367,28 @@ void PowerManager::printPowerStatus() const {
     Serial.print(F("Mode: ")); Serial.println(getPowerModeString());
     Serial.print(F("Field Mode: ")); Serial.println(status.fieldModeActive ? "ACTIVE" : "INACTIVE");
     
-    // Wake system status
-    Serial.print(F("RTC Interrupt: "));
-    if (rtcInterruptWorking) {
-        Serial.println(F("WORKING (hardware wake-up)"));
+    // Deep sleep status
+    Serial.print(F("Deep Sleep: "));
+    if (canUseDeepSleep()) {
+        Serial.print(F("ENABLED ("));
+        Serial.print(status.deepSleepCycles);
+        Serial.println(F(" cycles)"));
     } else {
-        Serial.println(F("DISABLED (polling fallback)"));
+        Serial.println(F("DISABLED (using polling)"));
     }
     
-    // Display status
-    Serial.print(F("Display: ")); Serial.print(status.displayOn ? "ON" : "OFF");
-    if (status.fieldModeActive) {
-        Serial.print(F(" (timeout: "));
-        Serial.print(settings.displayTimeoutMin);
-        Serial.print(F("min)"));
-        
-        if (status.displayOn) {
-            unsigned long timeRemaining = getDisplayTimeRemaining();
-            if (timeRemaining > 0) {
-                Serial.print(F(" - "));
-                Serial.print(timeRemaining / 60000);
-                Serial.print(F("m "));
-                Serial.print((timeRemaining % 60000) / 1000);
-                Serial.print(F("s remaining"));
-            }
-        }
-    }
-    Serial.println();
+    Serial.print(F("Wake from deep sleep: "));
+    Serial.println(status.wakeFromDeepSleep ? "YES" : "NO");
     
-    // ... rest of existing status code ...
+    Serial.print(F("Est. Runtime: "));
+    Serial.print(status.estimatedRuntimeHours, 1);
+    Serial.println(F(" hours"));
+    
+    if (canUseDeepSleep()) {
+        Serial.println(F("  (with true deep sleep)"));
+    } else {
+        Serial.println(F("  (with polling sleep)"));
+    }
     
     Serial.println(F("=====================================\n"));
 }

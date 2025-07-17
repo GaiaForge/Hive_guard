@@ -4,7 +4,7 @@
 
 #include "Config.h"
 #include "DataStructures.h"
-
+#include "Audio.h"
 class FieldModeBufferManager {
 private:
     FieldModeBuffer buffer;
@@ -13,7 +13,7 @@ public:
     FieldModeBufferManager();
     
     // Buffer management
-    bool addReading(const SensorData& data, uint32_t timestamp);
+    bool addReading(const SensorData& data, uint32_t timestamp, const AudioAnalysisResult* audioResult = nullptr);
     bool isBufferFull() const;
     uint8_t getBufferCount() const;
     void clearBuffer();
