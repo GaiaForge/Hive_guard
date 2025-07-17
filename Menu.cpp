@@ -795,7 +795,7 @@ void drawBeePresetMenu(Adafruit_SH1106G& display, int selected, SystemSettings& 
     // Draw visible items (skip custom, show others)
     for (int i = 0; i < visibleItems && (startItem + i) < totalItems; i++) {
         int presetIdx = startItem + i + 1; // +1 to skip custom (index 0)
-        int y = 26 + (i * 12);
+        int y = 26 + (i * 10);
         
         if ((startItem + i) == selected) {
             display.setCursor(0, y);
@@ -804,27 +804,21 @@ void drawBeePresetMenu(Adafruit_SH1106G& display, int selected, SystemSettings& 
         
         display.setCursor(12, y);
         display.print(BEE_PRESETS[presetIdx].name);
-        
-        // Show description for selected item
-        if ((startItem + i) == selected) {
-            display.setCursor(0, 56);
-            display.setTextSize(1);
-            display.print(BEE_PRESETS[presetIdx].description);
-        }
     }
     
     // Show scroll indicators if needed
     if (startItem > 0) {
         display.setCursor(120, 26);
-        display.print(F("↑")); // Up arrow
+        display.print(F("^")); // Up arrow
     }
     if (startItem + visibleItems < totalItems) {
         display.setCursor(120, 50);
-        display.print(F("↓")); // Down arrow
+        display.print(F("v")); // Down arrow
     }
     
     display.display();
 }
+
 // =============================================================================
 // ALERT THRESHOLDS MENU
 // =============================================================================
